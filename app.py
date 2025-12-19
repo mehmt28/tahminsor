@@ -235,4 +235,4 @@ if st.button("🤖 Tahmin Al"):
 
 
 
-st.caption("© tahminsor.site • Açık Erişim Spor Tahmin Platformu,Tahminsor bir bahis sitesi değil, istatistiksel analiz platformudur")
+st.caption("© tahminsor.site • Açık Erişim Spor Tahmin Platformu, Tahminsor bir bahis sitesi değil, istatistiksel analiz platformudur")
