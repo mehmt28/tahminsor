@@ -57,6 +57,10 @@ match_name = st.text_input(
 )
 
 if st.button("🤖 Tahmin Al"):
+    # Aynı maç için her tıklamada farklı tahmin üretilmemesi için
+    # match_name bazlı sabit bir random seed oluşturuyoruz
+    seed = abs(hash(match_name)) % (10**6)
+    np.random.seed(seed)
     if not match_name:
         st.warning("Lütfen maç adı girin")
         st.stop()
