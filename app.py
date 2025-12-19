@@ -232,16 +232,7 @@ if "expected_total" not in st.session_state:
     st.session_state.expected_total = 220.0
 
 st.divider()
-st.subheader("⏱️ Canlı Maç Simülasyonu")
 
-live_pts = st.number_input("Şu ana kadar atılan sayı", 0, 200, 52, key="live_pts")
-minutes = st.number_input("Oynanan dakika", 1, 40, 10, key="minutes")
-
-if st.button("📈 Canlı Projeksiyon"):
-    pace_factor = live_pts / minutes
-    proj = pace_factor * 40
-    final_proj = (proj + st.session_state.expected_total) / 2
-    st.write("Canlı Tahmini Final Total:", round(final_proj,1))
 
 
 
