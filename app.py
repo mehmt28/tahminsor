@@ -68,7 +68,6 @@ if st.button("🤖 Tahmin Al"):
 
         st.write(f"Beklenen Gol (xG): **{round(total_xg,2)}**")
         st.write(f"2.5 ÜST Olasılığı: **%{round(over25_prob*100,1)}**")
-  st.write(f"2.5 ALT Olasılığı: **%{round(under25_prob*100,1)}**")
         st.write(f"KG VAR Olasılığı: **%{round(btts_prob*100,1)}**")
 
         st.subheader("📌 Tahmin Özeti")
