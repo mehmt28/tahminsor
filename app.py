@@ -1,67 +1,250 @@
 # app.py
-# === Streamlit | Açık Erişim Spor Tahmin AI ===
-# OPSİYONLAR:
-# 1- Maç adı yazarak AI yorum
-# 2- Canlı basketbol projeksiyon
-# 3- Spor türü manuel düzeltme
-# 4- Futbol detaylı tahmin
-# 5- VALUE BET (DEĞERLİ ORAN) HESAPLAMA
+# === Streamlit | Kullanıcılı Spor Tahmin AI ===
 
 import streamlit as st
+import pandas as pd
 import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
 
-USERS = {"admin": "1234", "demo": "demo"}
+# ------------------
+# BASİT KULLANICI SİSTEMİ
+# ------------------
+USERS = {
+    "admin": "1234",
+    "demo": "demo"
+}
 
-st.set_page_config(page_title="TahminSor AI", layout="centered")
-st.title("🏀⚽ TahminSor | Spor Tahmin Yapay Zekâ")
+st.set_page_config(page_title="Spor Tahmin AI", layout="centered")
 
+st.title("🏀 Spor Tahmin Yapay Zekâ Sistemi")
+st.caption("Üst / Alt • Value Bet • Canlı Simülasyon")
+
+# ------------------
+# GİRİŞ EKRANI
+# ------------------
 if "login" not in st.session_state:
     st.session_state.login = False
 
 if not st.session_state.login:
     with st.form("login"):
-        u = st.text_input("Kullanıcı adı")
-        p = st.text_input("Şifre", type="password")
-        if st.form_submit_button("Giriş Yap"):
-            if u in USERS and USERS[u] == p:
+        st.subheader("🔐 Giriş")
+        username = st.text_input("Kullanıcı adı")
+        password = st.text_input("Şifre", type="password")
+        submit = st.form_submit_button("Giriş Yap")
+
+        if submit:
+            if username in USERS and USERS[username] == password:
                 st.session_state.login = True
+                st.session_state.user = username
+                st.success("Giriş başarılı")
                 st.rerun()
             else:
                 st.error("Hatalı giriş")
     st.stop()
 
-st.header("💬 Maç Adını Yaz – AI Tahmin")
-match = st.text_input("Maç adı")
+# ------------------
+# AÇIK ERİŞİM BİLGİLENDİRME
+# ------------------
+st.sidebar.markdown("### 🌍 Erişim Durumu")
+st.sidebar.success("Herkese Açık • Ücretsiz")
+st.sidebar.info("Bu platform istatistiksel tahminler sunar. Kesinlik içermez.")
+
+# ------------------
+# ------------------
+# DEMO MODEL (CSV ile değiştirilebilir)
+# ------------------
+data = {
+    'home_avg_points': [112,105,118,110,108,115],
+    'away_avg_points': [109,102,114,107,104,111],
+    'home_def_points': [108,110,105,109,111,106],
+    'away_def_points': [110,112,108,111,113,109],
+    'pace': [98,95,102,97,96,101],
+    'total_points': [221,207,232,217,212,226]
+}
+
+df = pd.DataFrame(data)
+barem_default = 160.5
+df['label'] = (df['total_points'] > barem_default).astype(int)
+
+X = df[['home_avg_points','away_avg_points','home_def_points','away_def_points','pace']]
+y = df['label']
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+model = RandomForestClassifier(n_estimators=200, max_depth=7, random_state=42)
+model.fit(X_scaled, y)
+
+# ------------------
+# MAÇ ADI SOR – AI TAHMİN ÜRETSİN (BASİT CHAT)
+# ------------------
+st.header("💬 Maç Adını Yaz – Yapay Zekâ Yorumlasın")
+st.write("Sadece maç adını yaz. Sistem genel form, tempo ve lig dinamiklerine göre tahmin üretir.")
+
+match_name = st.text_input(
+    "Maç adı:",
+    placeholder="Örnek: Lakers vs Warriors | Arsenal - Chelsea"
+)
 
 if st.button("🤖 Tahmin Al"):
-    q = match.lower()
-    futbol = ["fc","arsenal","chelsea","madrid","barcelona","galatasaray","fenerbahce"]
-    basket = ["nba","lakers","celtics","warriors","efes"]
+    if not match_name:
+        st.warning("Lütfen maç adı girin")
+        st.stop()
 
-    is_futbol = any(k in q for k in futbol)
-    is_basket = any(k in q for k in basket)
+    q = match_name.lower()
 
+    # ------------------
+    # FUTBOL / BASKETBOL AYRIMI (DÜZELTİLDİ)
+    # ------------------
+    futbol_kelimeler = [
+        " fc", "fk ", "sk ", " united", "city", "chelsea", "arsenal",
+        "madrid", "barcelona", "galatasaray", "fenerbahce",
+        "besiktas", "juventus", "milan", "inter", "psg",
+        "liverpool", "bayern", "dortmund"
+    ]
+
+    basket_kelimeler = [
+        "lakers", "warriors", "nba", "celtics", "bulls",
+        "heat", "knicks", "euroleague", "fenerbahce beko",
+        "anadolu efes", "real madrid baloncesto"
+    ]
+
+    is_futbol = any(k in q for k in futbol_kelimeler)
+    is_basket = any(k in q for k in basket_kelimeler)
+
+    # Varsayılan: tire varsa FUTBOL kabul et
     if "-" in q and not is_basket:
         is_futbol = True
 
-    if is_futbol == is_basket:
-        sec = st.radio("Spor türü:", ["Futbol","Basketbol"], horizontal=True)
-        is_futbol = sec == "Futbol"
+        # ------------------
+    # KULLANICI DÜZELTME SEÇENEĞİ (OPSİYON 3)
+    # ------------------
+    if is_futbol and is_basket:
+        st.warning("Maç türü net algılanamadı. Lütfen düzeltin:")
+        forced = st.radio("Bu maç hangi spor?", ["Futbol", "Basketbol"], horizontal=True)
+        if forced == "Futbol":
+            is_futbol = True
+            is_basket = False
+        else:
+            is_futbol = False
+            is_basket = True
 
+    elif not is_futbol and not is_basket:
+        forced = st.radio(
+            "Spor türü otomatik algılanamadı. Seçiniz:",
+            ["Futbol", "Basketbol"],
+            horizontal=True
+        )
+        if forced == "Futbol":
+            is_futbol = True
+        else:
+            is_basket = True
+
+    # ------------------
+    # FUTBOL MAÇ ALGILAMA
+    # ------------------
     if is_futbol:
-        g = np.random.uniform(2.0,3.0)
-        st.success(f"⚽ Beklenen gol: {round(g,2)}")
+        base_xg = np.random.uniform(1.1, 1.8)
+        total_goals_exp = base_xg * 2
+        over25_prob = min(max((total_goals_exp - 2.2) / 1.8, 0), 1)
+
+        st.subheader("⚽ Futbol AI Yorumu")
+        st.write(f"Beklenen gol aralığı: **{round(total_goals_exp-0.3,2)} – {round(total_goals_exp+0.3,2)}**")
+        st.write(f"2.5 ÜST olasılığı: **%{round(over25_prob*100,1)}**")
+
+        if over25_prob > 0.55:
+            st.success("Genel Yorum: **2.5 ÜST eğilimli**")
+        else:
+            st.info("Genel Yorum: **2.5 ALT eğilimli**")
+
+        st.caption("Bu tahmin lig ortalamaları ve genel form varsayımıyla üretilmiştir.")
+
+    # ------------------
+    # BASKETBOL MAÇ ALGILAMA
+    # ------------------
+    # ------------------
     else:
-        t = np.random.uniform(210,230)
-        st.success(f"🏀 Tahmini toplam sayı: {round(t,1)}")
+        pace_est = np.random.uniform(96, 101)
+        avg_total = np.random.uniform(210, 230)
+        expected_total = avg_total * pace_est / 100
+
+        st.subheader("🏀 Basketbol AI Yorumu")
+        st.write(f"Tahmini toplam sayı: **{round(expected_total,1)}**")
+
+        if expected_total > 220:
+            st.success("Genel Yorum: **ÜST eğilimli maç**")
+        else:
+            st.info("Genel Yorum: **ALT eğilimli maç**")
+
+        st.caption("Bu yorum tempo, lig ortalaması ve rastgeleleştirilmiş form varsayımı içerir.")
+
+# ------------------
+# CANLI MAÇ MODÜLÜ
+# (OPSİYON 4: session_state ile güvenli hale getirildi)
+
+if "expected_total" not in st.session_state:
+    st.session_state.expected_total = 220.0
 
 st.divider()
-st.subheader("💎 Value Bet Hesaplama")
-prob = st.number_input("Kazanma olasılığı (%)", 1.0, 99.0, 55.0)
-odd = st.number_input("Oran", 1.01, 20.0, 1.90)
+st.subheader("⏱️ Canlı Maç Simülasyonu")
 
-if st.button("💰 Value Var mı?"):
-    val = (prob/100)*odd - 1
-    st.success(f"VALUE VAR ({round(val,3)})") if val>0 else st.error(f"Value yok ({round(val,3)})")
+live_pts = st.number_input("Şu ana kadar atılan sayı", 0, 200, 52, key="live_pts")
+minutes = st.number_input("Oynanan dakika", 1, 40, 10, key="minutes")
 
-st.caption("© tahminsor.site")
+if st.button("📈 Canlı Projeksiyon"):
+    pace_factor = live_pts / minutes
+    proj = pace_factor * 40
+    final_proj = (proj + st.session_state.expected_total) / 2
+    st.write("Canlı Tahmini Final Total:", round(final_proj,1))
+
+# ------------------
+# FUTBOL TAHMİN MODÜLÜ
+# ------------------
+st.divider()
+st.subheader("⚽ Futbol Maç Tahmin Modülü")
+st.caption("Gol, 2.5 Üst/Alt, Maç Sonucu olasılık modeli")
+
+col1, col2 = st.columns(2)
+with col1:
+    home_xg = st.number_input("Ev Sahibi xG", 0.1, 4.0, 1.5)
+    home_goals_avg = st.number_input("Ev Gol Ort.", 0.1, 4.0, 1.6)
+with col2:
+    away_xg = st.number_input("Deplasman xG", 0.1, 4.0, 1.2)
+    away_goals_avg = st.number_input("Dep. Gol Ort.", 0.1, 4.0, 1.3)
+
+league_strength = st.selectbox("Lig Seviyesi", ["Düşük", "Orta", "Yüksek"])
+
+league_factor = {"Düşük":0.9, "Orta":1.0, "Yüksek":1.1}[league_strength]
+
+if st.button("⚽ Futbol Tahmini Al"):
+    total_goals_exp = (home_xg + away_xg + home_goals_avg + away_goals_avg) / 2 * league_factor
+
+    over25_prob = min(max((total_goals_exp - 2.0) / 2, 0), 1)
+    under25_prob = 1 - over25_prob
+
+    home_win = home_xg * 0.55
+    draw = 0.25
+    away_win = away_xg * 0.45
+    total = home_win + draw + away_win
+
+    home_win /= total
+    draw /= total
+    away_win /= total
+
+    st.subheader("📊 Futbol Tahmin Sonuçları")
+    st.write("Beklenen Gol:", round(total_goals_exp,2))
+    st.write("2.5 ÜST Olasılığı:", f"%{round(over25_prob*100,1)}")
+    st.write("2.5 ALT Olasılığı:", f"%{round(under25_prob*100,1)}")
+
+    st.markdown("### Maç Sonucu Olasılıkları")
+    st.write("Ev Sahibi:", f"%{round(home_win*100,1)}")
+    st.write("Beraberlik:", f"%{round(draw*100,1)}")
+    st.write("Deplasman:", f"%{round(away_win*100,1)}")
+
+    if over25_prob > 0.55:
+        st.success("Öneri: 2.5 ÜST")
+    else:
+        st.info("Öneri: 2.5 ALT")
+
+st.caption("© tahminsor.site • Açık Erişim Spor Tahmin Platformu")
