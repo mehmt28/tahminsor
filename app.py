@@ -156,7 +156,7 @@ if "expected_total" not in st.session_state:
     st.session_state.expected_total = 220.0
 
 st.divider()
-st.subheader("⏱️ Canlı Maç Simülasyonu")
+st.subheader("⏱️Basketbol Canlı Maç Simülasyonu")
 
 live_pts = st.number_input("Şu ana kadar atılan sayı", 0, 200, 52, key="live_pts")
 minutes = st.number_input("Oynanan dakika", 1, 40, 10, key="minutes")
