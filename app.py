@@ -8,40 +8,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 
 # ------------------
-# BASİT KULLANICI SİSTEMİ
-# ------------------
-USERS = {
-    "admin": "1234",
-    "demo": "demo"
-}
+# KULLANICI GİRİŞİ KALDIRILDI
+# Uygulama tamamen açık erişimdir
 
-st.set_page_config(page_title="Spor Tahmin AI", layout="centered")
-
-st.title("🏀 Spor Tahmin Yapay Zekâ Sistemi")
-st.caption("Üst / Alt • Value Bet • Canlı Simülasyon")
-
-# ------------------
-# GİRİŞ EKRANI
-# ------------------
-if "login" not in st.session_state:
-    st.session_state.login = False
-
-if not st.session_state.login:
-    with st.form("login"):
-        st.subheader("🔐 Giriş")
-        username = st.text_input("Kullanıcı adı")
-        password = st.text_input("Şifre", type="password")
-        submit = st.form_submit_button("Giriş Yap")
-
-        if submit:
-            if username in USERS and USERS[username] == password:
-                st.session_state.login = True
-                st.session_state.user = username
-                st.success("Giriş başarılı")
-                st.rerun()
-            else:
-                st.error("Hatalı giriş")
-    st.stop()
 
 # ------------------
 # AÇIK ERİŞİM BİLGİLENDİRME
