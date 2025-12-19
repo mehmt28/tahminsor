@@ -122,12 +122,34 @@ if st.button("🤖 Tahmin Al"):
         st.write(f"Beklenen gol aralığı: **{round(total_goals_exp-0.3,2)} – {round(total_goals_exp+0.3,2)}**")
         st.write(f"2.5 ÜST olasılığı: **%{round(over25_prob*100,1)}**")
 
+        # Güven seviyesi hesaplama
+        confidence = int(over25_prob * 100)
+        if over25_prob > 0.65:
+            risk_label = "🟢 Düşük Risk"
+        elif over25_prob > 0.55:
+            risk_label = "🟡 Orta Risk"
+        else:
+            risk_label = "🔴 Yüksek Risk"
+
+        st.subheader("📌 Tahmin Özeti")
+        st.write("Güven Seviyesi:", f"%{confidence}")
+        st.write("Risk Profili:", risk_label)
+
         if over25_prob > 0.55:
             st.success("Genel Yorum: **2.5 ÜST eğilimli**")
+            st.markdown("**Açıklama:** Beklenen gol ortalaması lig standartlarının üzerinde. Hücum katkısı ve tempo gollü senaryoyu destekliyor.")
         else:
             st.info("Genel Yorum: **2.5 ALT eğilimli**")
+            st.markdown("**Açıklama:** Gol beklentisi düşük. Savunma dengesi ve kontrollü oyun ihtimali öne çıkıyor.")
 
-        st.caption("Bu tahmin lig ortalamaları ve genel form varsayımıyla üretilmiştir.")
+        st.caption("Bu tahmin lig ortalamaları ve istatistiksel model varsayımlarıyla üretilmiştir.")
+
+        # ------------------
+        # TAHMİN AÇIKLAMA YORUMU
+        # Bu öneri; beklenen gol (xG), tempo, lig ortalamaları ve
+        # istatistiksel eşik değerlerin birlikte değerlendirilmesiyle oluşur.
+        # Amaç: kesin sonuç değil, olasılık avantajını göstermek.
+
 
     # ------------------
     # BASKETBOL MAÇ ALGILAMA
@@ -141,12 +163,26 @@ if st.button("🤖 Tahmin Al"):
         st.subheader("🏀 Basketbol AI Yorumu")
         st.write(f"Tahmini toplam sayı: **{round(expected_total,1)}**")
 
+        confidence = int(min(max((expected_total-200)/40,0),1)*100)
+        if expected_total > 225:
+            risk_label = "🟢 Düşük Risk"
+        elif expected_total > 215:
+            risk_label = "🟡 Orta Risk"
+        else:
+            risk_label = "🔴 Yüksek Risk"
+
+        st.subheader("📌 Tahmin Özeti")
+        st.write("Güven Seviyesi:", f"%{confidence}")
+        st.write("Risk Profili:", risk_label)
+
         if expected_total > 220:
             st.success("Genel Yorum: **ÜST eğilimli maç**")
+            st.markdown("**Açıklama:** Tempo ve ortalama skor projeksiyonu yüksek. Hızlı oyun bekleniyor.")
         else:
             st.info("Genel Yorum: **ALT eğilimli maç**")
+            st.markdown("**Açıklama:** Tempo ve sayı beklentisi düşük. Kontrollü senaryo öne çıkıyor.")
 
-        st.caption("Bu yorum tempo, lig ortalaması ve rastgeleleştirilmiş form varsayımı içerir.")
+        st.caption("Bu tahmin tempo, lig ortalaması ve istatistiksel projeksiyonlara dayanır.")
 
 # ------------------
 # CANLI MAÇ MODÜLÜ
@@ -156,7 +192,7 @@ if "expected_total" not in st.session_state:
     st.session_state.expected_total = 220.0
 
 st.divider()
-st.subheader("⏱️Basketbol Canlı Maç Simülasyonu")
+st.subheader("⏱️ Canlı Maç Simülasyonu")
 
 live_pts = st.number_input("Şu ana kadar atılan sayı", 0, 200, 52, key="live_pts")
 minutes = st.number_input("Oynanan dakika", 1, 40, 10, key="minutes")
@@ -167,5 +203,67 @@ if st.button("📈 Canlı Projeksiyon"):
     final_proj = (proj + st.session_state.expected_total) / 2
     st.write("Canlı Tahmini Final Total:", round(final_proj,1))
 
+# ------------------
+# FUTBOL TAHMİN MODÜLÜ
+# ------------------
+st.divider()
+st.subheader("⚽ Futbol Maç Tahmin Modülü")
+st.caption("Gol, 2.5 Üst/Alt, Maç Sonucu olasılık modeli")
+
+col1, col2 = st.columns(2)
+with col1:
+    home_xg = st.number_input("Ev Sahibi xG", 0.1, 4.0, 1.5)
+    home_goals_avg = st.number_input("Ev Gol Ort.", 0.1, 4.0, 1.6)
+with col2:
+    away_xg = st.number_input("Deplasman xG", 0.1, 4.0, 1.2)
+    away_goals_avg = st.number_input("Dep. Gol Ort.", 0.1, 4.0, 1.3)
+
+league_strength = st.selectbox("Lig Seviyesi", ["Düşük", "Orta", "Yüksek"])
+
+league_factor = {"Düşük":0.9, "Orta":1.0, "Yüksek":1.1}[league_strength]
+
+if st.button("⚽ Futbol Tahmini Al"):
+    total_goals_exp = (home_xg + away_xg + home_goals_avg + away_goals_avg) / 2 * league_factor
+
+    over25_prob = min(max((total_goals_exp - 2.0) / 2, 0), 1)
+    under25_prob = 1 - over25_prob
+
+    home_win = home_xg * 0.55
+    draw = 0.25
+    away_win = away_xg * 0.45
+    total = home_win + draw + away_win
+
+    home_win /= total
+    draw /= total
+    away_win /= total
+
+    st.subheader("📊 Futbol Tahmin Sonuçları")
+    st.write("Beklenen Gol:", round(total_goals_exp,2))
+    st.write("2.5 ÜST Olasılığı:", f"%{round(over25_prob*100,1)}")
+    st.write("2.5 ALT Olasılığı:", f"%{round(under25_prob*100,1)}")
+
+    st.markdown("### Maç Sonucu Olasılıkları")
+    st.write("Ev Sahibi:", f"%{round(home_win*100,1)}")
+    st.write("Beraberlik:", f"%{round(draw*100,1)}")
+    st.write("Deplasman:", f"%{round(away_win*100,1)}")
+
+    confidence = int(over25_prob * 100)
+    if over25_prob > 0.65:
+        risk = "🟢 Düşük Risk"
+    elif over25_prob > 0.55:
+        risk = "🟡 Orta Risk"
+    else:
+        risk = "🔴 Yüksek Risk"
+
+    st.subheader("📌 Nihai Değerlendirme")
+    st.write("Güven Seviyesi:", f"%{confidence}")
+    st.write("Risk Profili:", risk)
+
+    if over25_prob > 0.55:
+        st.success("Öneri: 2.5 ÜST")
+        st.markdown("**Neden?** Gol beklentisi ve lig seviyesi çarpanı üst seçeneğini daha avantajlı kılıyor.")
+    else:
+        st.info("Öneri: 2.5 ALT")
+        st.markdown("**Neden?** Gol beklentisi sınır değerin altında. Temkinli oyun senaryosu olası.")
 
 st.caption("© tahminsor.site • Açık Erişim Spor Tahmin Platformu")
