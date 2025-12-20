@@ -1,40 +1,4 @@
-app.py# MAÇ ADI SOR – AI TAHMİN ÜRETSİN (BASİT CHAT)
-# ------------------
-st.header("💬 Maç Adını Yaz – Yapay Zekâ Yorumlasın")
-st.write("Sadece maç adını yaz. Sistem genel form, tempo ve lig dinamiklerine göre tahmin üretir.")
-
-match_name = st.text_input(
-    "Maç adı:",
-    placeholder="Örnek: Lakers vs Warriors | Arsenal - Chelsea"
-)
-
-if st.button("🤖 Tahmin Al"):
-    # Aynı maç için her tıklamada farklı tahmin üretilmemesi için
-    # match_name bazlı sabit bir random seed oluşturuyoruz
-    seed = abs(hash(match_name)) % (10**6)
-    np.random.seed(seed)
-    if not match_name:
-        st.warning("Lütfen maç adı girin")
-        st.stop()
-
-    q = match_name.lower()
-
-    # ------------------
-    # FUTBOL / BASKETBOL AYRIMI (DÜZELTİLDİ)
-    # ------------------
-    futbol_kelimeler = [
-        " fc", "fk ", "sk ", " united", "city", "chelsea", "arsenal",
-        "madrid", "barcelona", "galatasaray", "fenerbahce",
-        "besiktas", "juventus", "milan", "inter", "psg",
-        "liverpool", "bayern", "dortmund"
-    ]
-
-    basket_kelimeler = [
-        "lakers", "warriors", "nba", "celtics", "bulls",
-        "heat", "knicks", "euroleague", "fenerbahce beko",
-        "anadolu efes", "real madrid baloncesto"
-    ]
-
+app.py
     is_futbol = any(k in q for k in futbol_kelimeler)
     is_basket = any(k in q for k in basket_kelimeler)
 
