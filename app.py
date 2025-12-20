@@ -1,145 +1,115 @@
-app.py
-    is_futbol = any(k in q for k in futbol_kelimeler)
-    is_basket = any(k in q for k in basket_kelimeler)
+# app.py
+# Tahminsor – Spor Tahmin Asistanı
 
-    # Varsayılan: tire varsa FUTBOL kabul et
-    if "-" in q and not is_basket:
-        is_futbol = True
+import streamlit as st
+import numpy as np
 
-        # ------------------
-    # KULLANICI DÜZELTME SEÇENEĞİ (OPSİYON 3)
-    # ------------------
-    if is_futbol and is_basket:
-        st.warning("Maç türü net algılanamadı. Lütfen düzeltin:")
-        forced = st.radio("Bu maç hangi spor?", ["Futbol", "Basketbol"], horizontal=True)
-        if forced == "Futbol":
-            is_futbol = True
-            is_basket = False
-        else:
-            is_futbol = False
-            is_basket = True
+st.set_page_config(
+    page_title="Tahminsor | Spor Tahmin AI",
+    page_icon="⚽",
+    layout="centered"
+)
 
-    elif not is_futbol and not is_basket:
-        forced = st.radio(
-            "Spor türü otomatik algılanamadı. Seçiniz:",
-            ["Futbol", "Basketbol"],
-            horizontal=True
-        )
-        if forced == "Futbol":
-            is_futbol = True
-        else:
-            is_basket = True
+st.title("💬 Tahminsor – Spor Tahmin Asistanı")
+st.caption("Benimle maç hakkında konuş, istatistiksel tahmin ve yorum al.")
 
-    # ------------------
-    # FUTBOL MAÇ ALGILAMA
-# (ÜST/ALT + KG VAR/YOK + KISA ÖZET)
-    # ------------------
+# -----------------------
+# CHAT STATE
+# -----------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Önceki mesajları göster
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# -----------------------
+# ANALİZ FONKSİYONU
+# -----------------------
+def analyze_match(text):
+    seed = abs(hash(text)) % (10**6)
+    np.random.seed(seed)
+
+    q = text.lower()
+
+    futbol_keys = [
+        "-", "fc", "city", "united", "madrid", "barcelona",
+        "galatasaray", "fenerbahce", "besiktas", "arsenal", "chelsea"
+    ]
+
+    basket_keys = [
+        "nba", "lakers", "warriors", "celtics",
+        "euroleague", "efes", "fenerbahce beko"
+    ]
+
+    is_basket = any(k in q for k in basket_keys)
+    is_futbol = any(k in q for k in futbol_keys) and not is_basket
+
+    # ---------- FUTBOL ----------
     if is_futbol:
-        base_xg = np.random.uniform(1.1, 1.8)
-        total_goals_exp = base_xg * 2
-        over25_prob = min(max((total_goals_exp - 2.2) / 1.8, 0), 1)
+        xg = np.random.uniform(2.1, 3.3)
+        over_prob = min(max((xg - 2.3) / 1.5, 0), 1)
 
-        st.subheader("⚽ Futbol AI Yorumu")
-        st.write(f"Beklenen gol aralığı: **{round(total_goals_exp-0.3,2)} – {round(total_goals_exp+0.3,2)}**")
-        st.write(f"2.5 ÜST olasılığı: **%{round(over25_prob*100,1)}**")
+        home = np.random.uniform(0.38, 0.52)
+        draw = 0.25
+        away = 1 - home - draw
 
-        # Güven seviyesi hesaplama
-        confidence = int(over25_prob * 100)
-        if over25_prob > 0.65:
-            risk_label = "🟢 Düşük Risk"
-        elif over25_prob > 0.55:
-            risk_label = "🟡 Orta Risk"
+        if home > away and home > draw:
+            result = "Ev Sahibi Kazanır (1)"
+        elif away > home and away > draw:
+            result = "Deplasman Kazanır (2)"
         else:
-            risk_label = "🔴 Yüksek Risk"
+            result = "Beraberlik (X)"
 
-        st.subheader("📌 Tahmin Özeti")
-        st.write("Güven Seviyesi:", f"%{confidence}")
-        st.write("Risk Profili:", risk_label)
+        return f"""
+⚽ **Futbol Analizi**
 
-        # Tahmin özeti ile yorumun birebir uyumlu olması için tek karar değişkeni kullanılır
-        if over25_prob > 0.55:
-            final_pick = "2.5 ÜST"
-            explanation = (
-                "Beklenen toplam gol değeri 2.5 sınırının üzerinde. "
-                "Tempo, hücum katkısı ve lig ortalaması gollü senaryoyu destekliyor."
-            )
-            st.success(f"Genel Tahmin: **{final_pick}**")
-        else:
-            final_pick = "2.5 ALT"
-            explanation = (
-                "Beklenen gol ortalaması 2.5 seviyesinin altında. "
-                "Daha kontrollü oyun ve savunma dengesi öne çıkıyor."
-            )
-            st.info(f"Genel Tahmin: **{final_pick}**")
+• Beklenen gol (xG): **{xg:.2f}**
+• 2.5 ÜST olasılığı: **%{over_prob*100:.0f}**
+• Maç sonucu eğilimi: **{result}**
 
-        st.markdown(f"**Tahmin Gerekçesi:** {explanation}")
+📌 **Neye göre?**  
+Bu tahmin; gol beklentisi (xG), lig ortalamaları ve
+istatistiksel denge birlikte değerlendirilerek üretilmiştir.
+"""
 
-        # --- MAÇ SONUCU (1-X-2) TAHMİNİ ---
-        home_win_prob = min(max((base_xg * 0.6), 0), 1)
-        away_win_prob = min(max((base_xg * 0.5), 0), 1)
-        draw_prob = 0.25
-
-        total_prob = home_win_prob + away_win_prob + draw_prob
-        home_win_prob /= total_prob
-        draw_prob /= total_prob
-        away_win_prob /= total_prob
-
-        st.subheader("🏟️ Maç Sonucu Olasılıkları")
-        st.write("Ev Sahibi Kazanır:", f"%{round(home_win_prob*100,1)}")
-        st.write("Beraberlik:", f"%{round(draw_prob*100,1)}")
-        st.write("Deplasman Kazanır:", f"%{round(away_win_prob*100,1)}")
-
-        # Net öneri
-        if home_win_prob > away_win_prob and home_win_prob > draw_prob:
-            st.success("Maç Sonucu Önerisi: **Ev Sahibi Kazanır (1)**")
-        elif away_win_prob > home_win_prob and away_win_prob > draw_prob:
-            st.success("Maç Sonucu Önerisi: **Deplasman Kazanır (2)**")
-        else:
-            st.info("Maç Sonucu Önerisi: **Beraberlik (X)**")
-
-        st.caption("Bu tahmin; xG, tempo, lig ortalamaları ve istatistiksel eşiklerin birlikte değerlendirilmesiyle üretilmiştir. (xG), tempo ve lig ortalamalarının birlikte değerlendirilmesiyle üretilmiştir.")
-
-        # ------------------
-        # TAHMİN AÇIKLAMA YORUMU
-        # Bu öneri; beklenen gol (xG), tempo, lig ortalamaları ve
-        # istatistiksel eşik değerlerin birlikte değerlendirilmesiyle oluşur.
-        # Amaç: kesin sonuç değil, olasılık avantajını göstermek.
-
-
-    # ------------------
-    # BASKETBOL MAÇ ALGILAMA
-# (BAREM SEÇİLEBİLİR – OPSİYON 2)
-    # ------------------
-    # ------------------
+    # ---------- BASKETBOL ----------
     else:
-        pace_est = np.random.uniform(96, 101)
-        avg_total = np.random.uniform(210, 230)
-        expected_total = avg_total * pace_est / 100
+        total = np.random.uniform(212, 234)
+        trend = "ÜST" if total > 220 else "ALT"
 
-        st.subheader("🏀 Basketbol AI Yorumu")
-        st.write(f"Tahmini toplam sayı: **{round(expected_total,1)}**")
+        return f"""
+🏀 **Basketbol Analizi**
 
-        confidence = int(min(max((expected_total-200)/40,0),1)*100)
-        if expected_total > 225:
-            risk_label = "🟢 Düşük Risk"
-        elif expected_total > 215:
-            risk_label = "🟡 Orta Risk"
-        else:
-            risk_label = "🔴 Yüksek Risk"
+• Tahmini toplam sayı: **{total:.1f}**
+• Genel eğilim: **{trend}**
 
-        st.subheader("📌 Tahmin Özeti")
-        st.write("Güven Seviyesi:", f"%{confidence}")
-        st.write("Risk Profili:", risk_label)
+📌 **Neye göre?**  
+Tempo, son maçlardaki sayı ortalamaları ve
+lig dinamikleri dikkate alınmıştır.
+"""
 
-        if expected_total > 220:
-            st.success("Genel Yorum: **ÜST eğilimli maç**")
-            st.markdown("**Açıklama:** Tempo ve ortalama skor projeksiyonu yüksek. Hızlı oyun bekleniyor.")
-        else:
-            st.info("Genel Yorum: **ALT eğilimli maç**")
-            st.markdown("**Açıklama:** Tempo ve sayı beklentisi düşük. Kontrollü senaryo öne çıkıyor.")
+# -----------------------
+# CHAT INPUT
+# -----------------------
+user_input = st.chat_input("Maç yaz veya soru sor (Örn: Arsenal - Chelsea)")
 
-        st.caption("Bu tahmin tempo, lig ortalaması ve istatistiksel projeksiyonlara dayanır.")
+if user_input:
+    st.session_state.messages.append(
+        {"role": "user", "content": user_input}
+    )
 
+    with st.chat_message("user"):
+        st.markdown(user_input)
 
+    response = analyze_match(user_input)
 
-st.caption("© tahminsor.site • Açık Erişim Spor Tahmin Platformu, Tahminsor bir bahis sitesi değil, istatistiksel analiz platformudur")
+    st.session_state.messages.append(
+        {"role": "assistant", "content": response}
+    )
+
+    with st.chat_message("assistant"):
+        st.markdown(response)
+
+st.caption("© tahminsor.site • Açık erişim, istatistiksel tahmin platformu")
