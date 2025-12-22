@@ -39,8 +39,7 @@ DETAY_KELIMELER = ["neden", "detay", "açıkla", "niye", "sebep"]
 
 def detay_sorusu_mu(q):
     return any(k in q for k in DETAY_KELIMELER)
-    elif yuzde_sorusu_mu(q) and st.session_state.son_mac:
-    cevap = yuzde_uret(st.session_state.son_mac)
+ 
 
 
 # ---------------- TAHMİN ----------------
@@ -102,6 +101,9 @@ if user_input:
     # 2️⃣ DETAY SORUSU VE ÖNCEKİ MAÇ VARSA
     elif detay_sorusu_mu(q) and st.session_state.son_mac:
         cevap = st.session_state.son_tahmin
+        elif yuzde_sorusu_mu(q) and st.session_state.son_mac:
+    cevap = yuzde_uret(st.session_state.son_mac)
+
 
     # 3️⃣ NORMAL SOHBET
     else:
