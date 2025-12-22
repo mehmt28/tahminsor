@@ -113,18 +113,22 @@ if user_input:
     q = user_input.lower()
 
     # 1️⃣ BAREM SORUSU (EN ÖNEMLİ FIX)
-    if barem_sorusu_mu(q) and st.session_state.son_mac:
-        barem = re.findall(r"\d+(\.\d+)?", q)[0]
-        alt_ust = "ALT" if "alt" in q else "ÜST"
+if barem_sorusu_mu(q) and st.session_state.son_mac:
+    barem = re.findall(r"\d+(\.\d+)?", q)[0]
+    alt_ust = "ALT" if "alt" in q else "ÜST"
 
-        if alt_ust == st.session_state.son_tahmin:
-            cevap = f"✅ **{bريم} {alt_ust}**, ana senaryomla uyumlu. Daha güvenli."
-        else:
-            cevap = (
-                f"⚠ **{bريم} {alt_ust}**, ana senaryoya ters.\n\n"
-                "Ancak tempo düşerse olabilir.\n"
-                "Yaklaşık olasılık: **%35–40**"
-            )
+    if alt_ust == st.session_state.son_tahmin:
+        cevap = (
+            f"✅ **{barem} {alt_ust}**, benim ana senaryomla uyumlu.\n\n"
+            "Bu barem daha güvenli tarafta."
+        )
+    else:
+        cevap = (
+            f"⚠ **{barem} {alt_ust}**, ana senaryoma ters.\n\n"
+            "Ancak tempo düşer ve savunma sertleşirse olabilir.\n"
+            "Yaklaşık olasılık: **%35–40**"
+        )
+
 
     # 2️⃣ MAÇ YAZILDI
     elif mac_format_var_mi(q):
