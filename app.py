@@ -133,7 +133,9 @@ if user_input:
             "mac": st.session_state.aktif_mac,
             **st.session_state.son_tahmin
         })
-        cevap = "✅ Tahmin kupona eklendi. A
+        cevap = "✅ Tahmin kupona eklendi. Aşağıda kuponunu görebilirsin 🧾"
+
+    # 4️⃣ Kuponu göster
     elif "kuponu göster" in q.lower():
         if not st.session_state.kupon:
             cevap = "📭 Kupon boş."
@@ -170,7 +172,8 @@ else:
     for i, k in enumerate(st.session_state.kupon, 1):
         toplam_oran *= k["oran"]
         st.markdown(f"**{i}.** {k['mac']} → **{k['secim']}** (Oran {k['oran']})")
-    st.markdown(f"\n💰 **Toplam Oran:** {round(toplam_oran, 2)}")
+    st.markdown(f"
+💰 **Toplam Oran:** {round(toplam_oran, 2)}")
 
 # ------------------
 # Alt Panel – Güven Bar
