@@ -166,6 +166,8 @@ if user_input:
 
 if st.session_state.son_tahmin:
     st.subheader("📊 Güven Barı")
-    st.progress(st.session_state.son_tahmin.get("guven", 50) / 100)
+    guven_degeri = st.session_state.son_tahmin.get("guven", 50)
+    st.progress(guven_degeri / 100)
+    st.markdown(f"**Güven Oranı:** %{guven_degeri}")
 
 st.caption("© tahminsor.site • Yapay Zekâ Destekli Spor Tahmin & Kupon Sistemi")
