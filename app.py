@@ -129,7 +129,6 @@ if barem_sorusu_mu(q) and st.session_state.son_mac:
             "Yaklaşık olasılık: **%35–40**"
         )
 
-
     # 2️⃣ MAÇ YAZILDI
     elif mac_format_var_mi(q):
         takimlar = [t.strip() for t in q.replace("vs", "-").split("-")]
