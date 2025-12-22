@@ -1,4 +1,4 @@
-# app.py — Tahminsor | Sohbet Modlu Spor Tahmin AI (DÜZELTİLMİŞ)
+# app.py — Tahminsor | Sohbet Modlu Spor Tahmin AI (FINAL – TEMİZ)
 
 import streamlit as st
 import numpy as np
@@ -13,8 +13,8 @@ st.sidebar.info("Tahminler istatistiksel değerlendirmeye dayanır. Kesinlik iç
 
 st.sidebar.markdown("""
 ### 🧠 Tahminler Neye Dayanır?
-- Takımların geçmiş performansı
-- Tempo ve maç hızı
+- Takımların genel güç dengesi
+- Tempo / maç hızı varsayımları
 - Lig ve maç bağlamı
 - Aynı soruya aynı cevap prensibi
 """)
@@ -23,8 +23,8 @@ st.sidebar.markdown("""
 today = datetime.date.today().strftime("%d %B %Y")
 st.markdown(f"## 🥇 Günün Favorisi ({today})")
 st.markdown(
-    "**Futbol:** 2.5 ÜST eğilimi\n\n"
-    "**Basketbol:** Tempo yüksek maçlarda ÜST avantajlı"
+    "**Futbol:** 2.5 ÜST eğilimli maçlar önde\n\n"
+    "**Basketbol:** Tempo yüksek maçlarda ÜST daha avantajlı"
 )
 
 st.divider()
@@ -34,39 +34,43 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Merhaba 👋 Benimle sohbet eder gibi yazabilirsin. İstersen maç da sorabilirsin."
+            "content": (
+                "Merhaba 👋\n\n"
+                "Benimle sohbet eder gibi konuşabilirsin.\n"
+                "İstersen bir maç adı yaz, birlikte analiz edelim 🙂"
+            )
         }
     ]
 
 if "tahmin_hafiza" not in st.session_state:
     st.session_state.tahmin_hafiza = {}
 
-# ---------------- YARDIMCI FONKSİYONLAR ----------------
+# ---------------- TAKIM LİSTELERİ ----------------
 FUTBOL_TAKIMLAR = [
     "galatasaray", "fenerbahce", "besiktas", "trabzon",
-    "madrid", "barcelona", "city", "united", "arsenal"
+    "real madrid", "madrid", "barcelona",
+    "manchester city", "city", "united", "arsenal"
 ]
 
 BASKET_TAKIMLAR = [
-    "nba", "euroleague", "lakers", "celtics",
-    "warriors", "bulls", "efes", "beko"
+    "nba", "euroleague",
+    "lakers", "celtics", "warriors", "bulls",
+    "anadolu efes", "efes", "fenerbahce beko", "beko"
 ]
 
-TAHMIN_KELIMELERI = ["maç", "tahmin", "üst", "alt", "oran", "kim kazanır", "vs", "-"]
-
-def mac_algilandi_mi(q: str) -> bool:
+# ---------------- ALGILAMA ----------------
+def takim_var_mi(q: str) -> bool:
     q = q.lower()
-    takim_var = any(t in q for t in FUTBOL_TAKIMLAR + BASKET_TAKIMLAR)
-    tahmin_istegi = any(k in q for k in TAHMIN_KELIMELERI)
-    return takim_var or tahmin_istegi
+    return any(t in q for t in FUTBOL_TAKIMLAR + BASKET_TAKIMLAR)
 
-def futbol_mu(q):
+def futbol_mu(q: str) -> bool:
     return any(t in q for t in FUTBOL_TAKIMLAR)
 
-def basket_mu(q):
+def basket_mu(q: str) -> bool:
     return any(t in q for t in BASKET_TAKIMLAR)
 
-def futbol_tahmin(mac):
+# ---------------- TAHMİN MOTORU ----------------
+def futbol_tahmin(mac: str) -> str:
     seed = abs(hash(mac)) % 10**6
     rng = np.random.default_rng(seed)
 
@@ -80,16 +84,16 @@ def futbol_tahmin(mac):
     return f"""
 ⚽ **Futbol Yorumu**
 
-Bu maçta oyun temposu **{'yüksek' if ust else 'kontrollü'}**.
+Bu maçta oyun temposu **{'yüksek' if ust else 'kontrollü'}** görünüyor.
 
 - Beklenen gol: **{xg:.2f}**
 - 2.5 Gol: **{'ÜST 🟢' if ust else 'ALT 🔴'}**
-- Maç sonucu: **{sonuc}**
+- Maç sonucu görüşüm: **{sonuc}**
 
 👉 Benim favorim: **{'2.5 ÜST' if ust else '2.5 ALT'}**
 """
 
-def basket_tahmin(mac):
+def basket_tahmin(mac: str) -> str:
     seed = abs(hash(mac)) % 10**6
     rng = np.random.default_rng(seed)
 
@@ -99,6 +103,8 @@ def basket_tahmin(mac):
     return f"""
 🏀 **Basketbol Yorumu**
 
+Bu maçta tempo **{'yüksek' if ust else 'düşük'}**.
+
 - Tahmini toplam sayı: **{toplam:.1f}**
 - Toplam: **{'ÜST 🟢' if ust else 'ALT 🔴'}**
 
@@ -106,11 +112,49 @@ def basket_tahmin(mac):
 """
 
 # ---------------- CHAT ----------------
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
+for mesaj in st.session_state.messages:
+    with st.chat_message(mesaj["role"]):
+        st.markdown(mesaj["content"])
 
-user_input = st.chat_input("Bir şey yaz… (maç da sorabilirsin)")
+user_input = st.chat_input("Bir şey yaz… (örnek: Galatasaray Fenerbahçe)")
 
 if user_input:
-    st
+    st.session_state.messages.append(
+        {"role": "user", "content": user_input}
+    )
+
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    q = user_input.lower()
+
+    # 🔑 EN KRİTİK AYRIM
+    if not takim_var_mi(q):
+        cevap = (
+            "Seni anlıyorum 🙂\n\n"
+            "Ama tahmin yapabilmem için **maç adını** bilmem gerekiyor.\n"
+            "Örnek: *Galatasaray Fenerbahçe* veya *Lakers Celtics*"
+        )
+    else:
+        if q not in st.session_state.tahmin_hafiza:
+            if futbol_mu(q) and not basket_mu(q):
+                st.session_state.tahmin_hafiza[q] = futbol_tahmin(q)
+            elif basket_mu(q):
+                st.session_state.tahmin_hafiza[q] = basket_tahmin(q)
+            else:
+                st.session_state.tahmin_hafiza[q] = futbol_tahmin(q)
+
+        cevap = (
+            "Güzel maç seçtin 🙂\n"
+            + st.session_state.tahmin_hafiza[q]
+            + "\nİstersen bu maçın riskini, canlı senaryosunu veya alternatifini de konuşabiliriz."
+        )
+
+    st.session_state.messages.append(
+        {"role": "assistant", "content": cevap}
+    )
+
+    with st.chat_message("assistant"):
+        st.markdown(cevap)
+
+st.caption("© tahminsor.site • Sohbet Modlu Yapay Zekâ Spor Tahminleri")
