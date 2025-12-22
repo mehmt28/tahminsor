@@ -1,11 +1,11 @@
 # app.py
-# === Tahminsor | Sohbet + Spor Tahmin AI (FINAL PRO SÜRÜM) ===
+# === Tahminsor | Sohbet + Spor Tahmin AI (STABLE FINAL) ===
 
 import streamlit as st
 import numpy as np
 import re
 
-st.set_page_config(page_title="Tahminsor | Spor Tahmin AI", layout="centered")
+st.set_page_config(page_title="Tahminsor", layout="centered")
 
 # ------------------
 # Yardımcı fonksiyonlar
@@ -16,7 +16,10 @@ def mac_format_var_mi(text):
 
 
 def lig_belirtildi_mi(text):
-    anahtarlar = ["futbol", "basketbol", "kbl", "nba", "euroleague", "süper lig", "super lig", "lig"]
+    anahtarlar = [
+        "futbol", "basketbol", "süper lig", "super lig",
+        "kbl", "nba", "euroleague", "ligi", "lig"
+    ]
     return any(k in text.lower() for k in anahtarlar)
 
 
@@ -28,14 +31,14 @@ def kg_sorusu_mu(text):
     return "kg" in text.lower() or "karşılıklı" in text.lower()
 
 
-def iki_bucuk_sorusu_mu(text):
-    return "2.5" in text or "2,5" in text
-
 # ------------------
 # Session State
 # ------------------
 
-for key in ["messages", "aktif_mac", "spor_turu", "son_tahmin", "kupon"]:
+for key in [
+    "messages", "aktif_mac", "spor_turu",
+    "son_tahmin", "kupon", "son_eklenen"
+]:
     if key not in st.session_state:
         st.session_state[key] = [] if key in ["messages", "kupon"] else None
 
@@ -43,8 +46,8 @@ for key in ["messages", "aktif_mac", "spor_turu", "son_tahmin", "kupon"]:
 # Başlık
 # ------------------
 
-st.title("💬 Tahminsor – Yapay Zekâ Spor Sohbeti")
-st.caption("Maç yaz → analiz al → oran & kupon oluştur 💰")
+st.title("💬 Tahminsor – Spor Tahmin Asistanı")
+st.caption("Maç yaz → analiz al → kupon yap 🧾")
 
 # ------------------
 # Mesajları göster
@@ -58,10 +61,10 @@ for msg in st.session_state.messages:
 # Kullanıcı girişi
 # ------------------
 
-user_input = st.chat_input("Mesajını yaz…")
+q = st.chat_input("Mesajını yaz…")
 
-if user_input:
-    q = user_input.strip()
+if q:
+    q = q.strip()
     st.session_state.messages.append({"role": "user", "content": q})
     cevap = None
 
@@ -76,66 +79,83 @@ if user_input:
             "Örn: Türkiye Süper Ligi / Güney Kore basketbol ligi"
         )
 
-    # 2️⃣ Lig / spor türü
+    # 2️⃣ Lig belirtildi → ana analiz
     elif st.session_state.aktif_mac and not st.session_state.spor_turu and lig_belirtildi_mi(q):
         st.session_state.spor_turu = q.lower()
         np.random.seed(abs(hash(st.session_state.aktif_mac)) % 10**6)
 
         # FUTBOL
         if "futbol" in q.lower() or "lig" in q.lower():
-            ev = round(np.random.uniform(40, 55), 1)
+            ev = round(np.random.uniform(45, 55), 1)
             ber = round(np.random.uniform(20, 30), 1)
             dep = round(100 - ev - ber, 1)
-            oran = round(1 + (100 / ev), 2)
             guven = int(ev)
 
             st.session_state.son_tahmin = {
                 "tur": "futbol",
                 "secim": "Ev Sahibi",
-                "oran": oran,
+                "oran": round(1 + (100 / ev), 2),
                 "guven": guven
             }
 
             cevap = (
                 "⚽ **Futbol Analizi (1X2)**\n\n"
-                f"🏠 Ev Sahibi: **%{ev}** (Oran ~{oran})\n"
-                f"🤝 Beraberlik: **%{ber}**\n"
-                f"🚗 Deplasman: **%{dep}**\n\n"
-                f"👉 **Öneri:** Ev Sahibi\n\n"
-                f"📊 Güven Seviyesi: **%{guven}**"
+                f"🏠 Ev Sahibi: %{ev}\n"
+                f"🤝 Beraberlik: %{ber}\n"
+                f"🚗 Deplasman: %{dep}\n\n"
+                f"👉 **Önerim:** Ev Sahibi\n"
+                f"📊 **Güven:** %{guven}\n\n"
+                "Devam edebiliriz:\n"
+                "• 2.5 Alt/Üst?\n"
+                "• KG Var mı?"
             )
 
         # BASKETBOL
         else:
             toplam = round(np.random.uniform(210, 225), 1)
             senaryo = "ALT" if toplam < 220 else "ÜST"
-            oran = round(np.random.uniform(1.6, 1.9), 2)
-            guven = int(abs(220 - toplam) + 50)
+            guven = min(int(abs(220 - toplam) + 55), 85)
 
             st.session_state.son_tahmin = {
                 "tur": "basketbol",
                 "secim": senaryo,
-                "oran": oran,
-                "guven": min(guven, 85)
+                "oran": round(np.random.uniform(1.6, 1.9), 2),
+                "guven": guven
             }
 
             cevap = (
                 "🏀 **Basketbol Analizi**\n\n"
-                f"🔢 Tahmini toplam sayı: **{toplam}**\n"
-                f"📊 Ana senaryo: **{senaryo}**\n"
-                f"💰 Oran: **{oran}**\n"
-                f"📊 Güven Seviyesi: **%{st.session_state.son_tahmin['guven']}**"
+                f"🔢 Tahmini toplam: {toplam}\n"
+                f"📌 Ana senaryo: **{senaryo}**\n"
+                f"📊 **Güven:** %{guven}\n\n"
+                "Barem sorabilirsin (örn: 153.5 üst olur mu?)"
             )
 
-    # 3️⃣ Kupona ekle
-    elif "kupon" in q.lower() and st.session_state.son_tahmin:
-        st.session_state.kupon.append({
-            "mac": st.session_state.aktif_mac,
-            **st.session_state.son_tahmin
-        })
-        cevap = "✅ Tahmin kupona eklendi. Devam edebilirsin."
+    # 3️⃣ Barem / KG soruları
+    elif st.session_state.son_tahmin and (barem_sorusu_mu(q) or kg_sorusu_mu(q)):
+        ana = st.session_state.son_tahmin["secim"]
+        cevap = (
+            f"🔍 **Değerlendirme**\n\n"
+            f"Ana senaryom: **{ana}**\n\n"
+            "Bu alternatif daha düşük olasılıklı.\n"
+            "Yaklaşık ihtimal: **%35–40**\n\n"
+            "🎯 Daha güvenlisi ana senaryo."
+        )
 
-    # 4️⃣ Kupon göster
+    # 4️⃣ Kupona ekle (tekil kontrol)
+    elif "kupon" in q.lower() and st.session_state.son_tahmin:
+        secim_id = (st.session_state.aktif_mac, st.session_state.son_tahmin["secim"])
+        if secim_id == st.session_state.son_eklenen:
+            cevap = "⚠️ Bu tahmin zaten kuponda."
+        else:
+            st.session_state.kupon.append({
+                "mac": st.session_state.aktif_mac,
+                **st.session_state.son_tahmin
+            })
+            st.session_state.son_eklenen = secim_id
+            cevap = "✅ Tahmin kupona eklendi. Devam edebilirsin."
+
+    # 5️⃣ Kuponu göster
     elif "kuponu göster" in q.lower():
         if not st.session_state.kupon:
             cevap = "📭 Kupon boş."
@@ -148,12 +168,12 @@ if user_input:
             metin += f"\n💰 **Toplam Oran:** {round(toplam_oran,2)}"
             cevap = metin
 
-    # 5️⃣ Normal sohbet
+    # 6️⃣ Normal sohbet
     else:
         cevap = (
             "Sohbet edebiliriz 🙂\n\n"
             "Maç yaz → analiz al → **kupon yap** 🧾\n"
-            "Örn: **Başakşehir - Gaziantep**"
+            "Örn: Başakşehir - Gaziantep"
         )
 
     st.session_state.messages.append({"role": "assistant", "content": cevap})
@@ -161,13 +181,13 @@ if user_input:
         st.markdown(cevap)
 
 # ------------------
-# Alt Panel – Güven Bar
+# Güven Barı
 # ------------------
 
 if st.session_state.son_tahmin:
-    st.subheader("📊 Güven Barı")
-    guven_degeri = st.session_state.son_tahmin.get("guven", 50)
-    st.progress(guven_degeri / 100)
-    st.markdown(f"**Güven Oranı:** %{guven_degeri}")
+    st.subheader("📊 Güven Seviyesi")
+    g = st.session_state.son_tahmin["guven"]
+    st.progress(g / 100)
+    st.markdown(f"**%{g} güven**")
 
-st.caption("© tahminsor.site • Yapay Zekâ Destekli Spor Tahmin & Kupon Sistemi")
+st.caption("© Tahminsor • Yapay Zekâ Destekli Tahmin Sistemi")
