@@ -1,5 +1,5 @@
 # app.py — TAHMİNSOR FINAL
-# Sohbet + Maç Analizi + Lig Algılama + Barem Takibi
+# Sohbet + Spor Tahmin + Doğal Dil + Barem Takibi
 
 import streamlit as st
 import numpy as np
@@ -8,7 +8,7 @@ import re
 
 st.set_page_config(page_title="Tahminsor", page_icon="📊")
 
-# ---------------- SESSION STATE ----------------
+# ================= SESSION =================
 if "messages" not in st.session_state:
     st.session_state.messages = [{
         "role": "assistant",
@@ -21,40 +21,34 @@ if "messages" not in st.session_state:
 
 if "son_mac" not in st.session_state:
     st.session_state.son_mac = None
-
-if "son_tahmin" not in st.session_state:
     st.session_state.son_tahmin = None
-
-if "son_detay" not in st.session_state:
     st.session_state.son_detay = None
-
-if "bekleyen_mac" not in st.session_state:
     st.session_state.bekleyen_mac = None
 
 
-# ---------------- ANAHTAR KELİMELER ----------------
+# ================= ANAHTARLAR =================
 DETAY_KELIMELER = ["neden", "detay", "açıkla", "niye"]
 YUZDE_KELIMELER = ["yüzde", "olasılık", "ihtimal"]
-BASKET_IPUCLARI = ["basket", "basketbol", "kbl", "nba", "lig", "ligi", "league"]
+BASKET_IPUCLARI = ["basket", "basketbol", "kbl", "nba", "lig", "ligi"]
 
 
-# ---------------- YARDIMCI FONKSİYONLAR ----------------
-def mac_format_var_mi(q: str) -> bool:
+# ================= YARDIMCI =================
+def mac_format_var_mi(q):
     return "-" in q or " vs " in q or " v " in q
 
-def detay_sorusu_mu(q: str) -> bool:
+def detay_sorusu(q):
     return any(k in q for k in DETAY_KELIMELER)
 
-def yuzde_sorusu_mu(q: str) -> bool:
+def yuzde_sorusu(q):
     return any(k in q for k in YUZDE_KELIMELER)
 
-def basket_ipucu_mu(q: str) -> bool:
+def basket_ipucu(q):
     return any(k in q for k in BASKET_IPUCLARI)
 
-def barem_sorusu_mu(q: str) -> bool:
-    return bool(re.search(r"\d+(\.\d+)?\s*(alt|üst)", q))
+def barem_sorusu(q):
+    return bool(re.search(r"\d+(?:[.,]\d+)?\s*(alt|üst)", q))
 
-def spor_turu_bul(takim: str):
+def spor_turu_bul(takim):
     try:
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{takim.replace(' ', '_')}"
         r = requests.get(url, timeout=5)
@@ -70,39 +64,38 @@ def spor_turu_bul(takim: str):
     return None
 
 
-# ---------------- TAHMİN MOTORU ----------------
-def basket_tahmin(mac: str):
+# ================= TAHMİN MOTORU =================
+def basket_tahmin(mac):
     seed = abs(hash(mac)) % 1_000_000
     rng = np.random.default_rng(seed)
 
-    tahmini_toplam = rng.uniform(215, 235)
-    ust_mu = tahmini_toplam > 225
+    toplam = rng.uniform(215, 235)
+    ana = "ÜST" if toplam > 225 else "ALT"
 
     ozet = (
         "🏀 **Basketbol Analizi**\n\n"
-        f"- Tahmini toplam sayı: **{tahmini_toplam:.1f}**\n"
-        f"- Genel senaryo: **{'ÜST 🟢' if ust_mu else 'ALT 🔴'}**\n\n"
-        f"👉 **Benim favorim:** {'ÜST' if ust_mu else 'ALT'}"
+        f"- Tahmini toplam sayı: **{toplam:.1f}**\n"
+        f"- Genel senaryo: **{ana}**\n\n"
+        f"👉 **Benim favorim:** {ana}"
     )
 
     detay = (
-        "🔍 **Neye göre bu tahmin?**\n\n"
-        "- Takımların hücum–savunma dengesi\n"
-        "- Lig temposu (pace)\n"
-        "- Benzer eşleşmelerin skor aralığı\n"
+        "🔍 **Neden bu tahmin?**\n\n"
+        "- Lig temposu\n"
+        "- Takımların hücum / savunma dengesi\n"
+        "- Benzer maçların sayı aralığı\n"
         "- İstatistiksel eşiklere göre olasılık avantajı"
     )
 
-    return ozet, detay, ("ÜST" if ust_mu else "ALT")
+    return ozet, detay, ana
 
 
-# ---------------- CHAT ARAYÜZÜ ----------------
+# ================= CHAT =================
 st.header("💬 Tahminsor Sohbet")
-st.caption("Sohbet edebilir, maç sorabilir, barem üzerine devam edebilirsin.")
 
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
 
 user_input = st.chat_input("Bir şey yaz…")
 
@@ -112,11 +105,12 @@ if user_input:
         st.markdown(user_input)
 
     q = user_input.lower().strip()
+    qn = q.replace(",", ".")
 
-    # -------- 1️⃣ BAREM SORUSU --------
-    if barem_sorusu_mu(q) and st.session_state.son_mac:
-        barem = re.findall(r"\d+(\.\d+)?", q)[0]
-        alt_ust = "ALT" if "alt" in q else "ÜST"
+    # -------- 1️⃣ BAREM ALT / ÜST --------
+    if barem_sorusu(q) and st.session_state.son_mac:
+        barem = re.findall(r"\d+(?:\.\d+)?", qn)[0]
+        alt_ust = "ALT" if "alt" in qn else "ÜST"
 
         if alt_ust == st.session_state.son_tahmin:
             cevap = (
@@ -130,7 +124,22 @@ if user_input:
                 "Yaklaşık olasılık: **%35–40**"
             )
 
-    # -------- 2️⃣ MAÇ ADI --------
+    # -------- 2️⃣ DOĞAL DİL BAREM --------
+    elif st.session_state.son_mac and re.search(r"\d+(?:\.\d+)?", qn):
+        sayi = float(re.findall(r"\d+(?:\.\d+)?", qn)[0])
+
+        if st.session_state.son_tahmin == "ALT":
+            cevap = (
+                f"🔍 **{sayi}** baremi {'düşük' if sayi < 160 else 'sınırda'}.\n\n"
+                "Savunma ve tempo beklentisi nedeniyle ALT hâlâ mantıklı."
+            )
+        else:
+            cevap = (
+                f"📊 **{sayi}** baremi üst senaryosu için değerlendirilebilir.\n\n"
+                "Tempo ve hücum katkısı bunu destekliyor."
+            )
+
+    # -------- 3️⃣ MAÇ ADI --------
     elif mac_format_var_mi(q):
         takimlar = [t.strip() for t in q.replace("vs", "-").split("-")]
         spor = None
@@ -141,9 +150,9 @@ if user_input:
                 break
 
         if spor == "basket":
-            ozet, detay, tahmin = basket_tahmin(q)
+            ozet, detay, ana = basket_tahmin(q)
             st.session_state.son_mac = q
-            st.session_state.son_tahmin = tahmin
+            st.session_state.son_tahmin = ana
             st.session_state.son_detay = detay
             cevap = "Analize geçiyorum 👇\n\n" + ozet
         else:
@@ -154,34 +163,4 @@ if user_input:
                 "Örn: Güney Kore basketbol ligi"
             )
 
-    # -------- 3️⃣ LİG BİLGİSİ --------
-    elif basket_ipucu_mu(q) and st.session_state.bekleyen_mac:
-        mac = st.session_state.bekleyen_mac
-        ozet, detay, tahmin = basket_tahmin(mac)
-        st.session_state.son_mac = mac
-        st.session_state.son_tahmin = tahmin
-        st.session_state.son_detay = detay
-        st.session_state.bekleyen_mac = None
-        cevap = "Tamam 👍\n\n" + ozet
-
-    # -------- 4️⃣ DETAY --------
-    elif detay_sorusu_mu(q) and st.session_state.son_mac:
-        cevap = st.session_state.son_detay
-
-    # -------- 5️⃣ YÜZDE --------
-    elif yuzde_sorusu_mu(q) and st.session_state.son_mac:
-        cevap = "📊 Bu senaryo için güven aralığım **%60–65**."
-
-    # -------- 6️⃣ NORMAL SOHBET --------
-    else:
-        cevap = (
-            "Sohbet edebiliriz 🙂\n\n"
-            "Maç tahmini için iki takımı ayırarak yaz:\n"
-            "**Anyang KGC - Samsung Thunders**"
-        )
-
-    st.session_state.messages.append({"role": "assistant", "content": cevap})
-    with st.chat_message("assistant"):
-        st.markdown(cevap)
-
-st.caption("© tahminsor.site • Yapay Zekâ Destekli Spor Tahmin Sohbeti")
+    # ------
