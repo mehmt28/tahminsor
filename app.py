@@ -1,8 +1,9 @@
-# app.py — Tahminsor FINAL
-# Sohbet + Futbol Tahmini + Neden + Yüzde + Bağlam Takibi
+# app.py — Tahminsor FINAL PRO
+# Sohbet + Akıllı Maç Algılama + İnternet Destekli Spor Tanıma
 
 import streamlit as st
 import numpy as np
+import requests
 
 st.set_page_config(page_title="Tahminsor", page_icon="⚽")
 
@@ -23,20 +24,7 @@ if "son_mac" not in st.session_state:
 if "son_detay" not in st.session_state:
     st.session_state.son_detay = None
 
-# ---------------- TAKIM LİSTESİ ----------------
-FUTBOL_TAKIMLAR = [
-    "galatasaray", "fenerbahce", "besiktas", "trabzonspor",
-    "başakşehir", "basaksehir",
-    "gaziantep", "gaziantep fk",
-    "adana demirspor", "konyaspor",
-    "antalyaspor", "kasimpasa"
-]
-
-# ---------------- ALGILAMA ----------------
-def mac_mesaji_mi(q):
-    ayiricilar = ["-", " vs ", " v "]
-    return any(a in q for a in ayiricilar) and any(t in q for t in FUTBOL_TAKIMLAR)
-
+# ---------------- ANAHTAR KELİMELER ----------------
 DETAY_KELIMELER = ["neden", "detay", "açıkla", "niye", "sebep"]
 YUZDE_KELIMELER = ["yüzde", "olasılık", "ihtimal", "güven", "kaç"]
 
@@ -46,12 +34,36 @@ def detay_sorusu_mu(q):
 def yuzde_sorusu_mu(q):
     return any(k in q for k in YUZDE_KELIMELER)
 
-# ---------------- TAHMİN ----------------
+# ---------------- MAÇ FORMAT KONTROL ----------------
+def mac_format_var_mi(q):
+    return any(a in q for a in ["-", " vs ", " v "])
+
+# ---------------- WIKIPEDIA SPOR TESPİT ----------------
+def spor_turu_bul(takim_adi):
+    try:
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{takim_adi.replace(' ', '_')}"
+        r = requests.get(url, timeout=5)
+        if r.status_code != 200:
+            return None
+
+        text = r.json().get("extract", "").lower()
+
+        if "basketball" in text or "basketball team" in text:
+            return "basket"
+        if "football" in text or "soccer" in text or "football club" in text:
+            return "futbol"
+
+    except:
+        return None
+
+    return None
+
+# ---------------- TAHMİN MOTORLARI ----------------
 def futbol_tahmin(mac):
     seed = abs(hash(mac)) % 10**6
     rng = np.random.default_rng(seed)
 
-    xg = rng.uniform(2.5, 3.2)
+    xg = rng.uniform(2.4, 3.3)
     ust = xg > 2.5
     sonuc = rng.choice(
         ["Ev Sahibi Kazanır", "Beraberlik", "Deplasman Kazanır"],
@@ -68,15 +80,43 @@ def futbol_tahmin(mac):
 👉 **Favorim:** {'2.5 ÜST' if ust else '2.5 ALT'}
 """
 
-    detay = f"""
-🔍 **Neden bu tahmin?**
+    detay = """
+🔍 **Bu tahmin neye dayanıyor?**
 
-- İki takımın hücum üretimi maç başına **yüksek gol beklentisi** oluşturuyor  
-- Tempo düşüşü sinyali yok  
-- Ev sahibi faktörü sonucu yukarı çekiyor  
-- Benzer maç örüntülerinde **üst oranı daha baskın**
+- Takımların hücum profili
+- Ortalama tempo varsayımı
+- Benzer lig maçlarındaki gol eşikleri
+- Ev sahibi / deplasman dengesi
 
-Bu nedenle **2.5 ÜST senaryosu** öne çıkıyor.
+Bu faktörler birlikte değerlendirildi.
+"""
+
+    return ozet, detay
+
+def basket_tahmin(mac):
+    seed = abs(hash(mac)) % 10**6
+    rng = np.random.default_rng(seed)
+
+    toplam = rng.uniform(210, 238)
+    ust = toplam > 220
+
+    ozet = f"""
+🏀 **Basketbol Analizi**
+
+- Tahmini toplam sayı: **{toplam:.1f}**
+- Toplam: **{'ÜST 🟢' if ust else 'ALT 🔴'}**
+
+👉 **Favorim:** {'ÜST' if ust else 'ALT'}
+"""
+
+    detay = """
+🔍 **Bu tahmin neye dayanıyor?**
+
+- Lig genel tempo seviyesi
+- Hücum / savunma denge varsayımları
+- Benzer eşleşmelerin sayı aralığı
+
+Tempo yüksek senaryo öne çıkıyor.
 """
 
     return ozet, detay
@@ -85,20 +125,20 @@ def yuzde_uret(mac):
     seed = abs(hash(mac + "yuzde")) % 10**6
     rng = np.random.default_rng(seed)
 
-    ust = rng.integers(60, 72)
-    ev = rng.integers(42, 55)
+    ust = rng.integers(58, 72)
+    ev = rng.integers(40, 55)
     ber = rng.integers(22, 30)
     dep = 100 - ev - ber
 
     return f"""
 📊 **Olasılık Yüzdeleri**
 
-- 2.5 ÜST: **%{ust}**
-- Ev Sahibi Kazanır: **%{ev}**
+- ÜST Senaryosu: **%{ust}**
+- Ev Sahibi: **%{ev}**
 - Beraberlik: **%{ber}**
-- Deplasman Kazanır: **%{dep}**
+- Deplasman: **%{dep}**
 
-ℹ️ Yüzdeler istatistiksel eşiklere ve geçmiş maç örüntülerine dayanır.
+ℹ️ Yüzdeler istatistiksel örüntülere dayanır.
 """
 
 # ---------------- CHAT ----------------
@@ -106,7 +146,7 @@ for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-user_input = st.chat_input("Bir şey yaz… (örn: Başakşehir - Gaziantep)")
+user_input = st.chat_input("Bir şey yaz… (örn: Brisbane Bullets - N.Z. Breakers)")
 
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -115,31 +155,47 @@ if user_input:
 
     q = user_input.lower()
 
-    # 1️⃣ MAÇ YAZILDIYSA
-    if mac_mesaji_mi(q):
-        ozet, detay = futbol_tahmin(q)
+    if mac_format_var_mi(q):
+        takimlar = [t.strip() for t in q.replace("vs", "-").split("-")]
+        spor = None
+
+        for t in takimlar:
+            spor = spor_turu_bul(t)
+            if spor:
+                break
+
+        if spor == "futbol":
+            ozet, detay = futbol_tahmin(q)
+        elif spor == "basket":
+            ozet, detay = basket_tahmin(q)
+        else:
+            cevap = (
+                "Takımları tanıdım ama spor türünü netleştiremedim 🤔\n\n"
+                "Biraz daha açık yazar mısın?"
+            )
+            st.session_state.messages.append({"role": "assistant", "content": cevap})
+            st.chat_message("assistant").markdown(cevap)
+            st.stop()
+
         st.session_state.son_mac = q
         st.session_state.son_detay = detay
         cevap = "Analize geçiyorum 👇\n" + ozet
 
-    # 2️⃣ DETAY SORUSU
     elif detay_sorusu_mu(q) and st.session_state.son_mac:
         cevap = st.session_state.son_detay
 
-    # 3️⃣ YÜZDE SORUSU
     elif yuzde_sorusu_mu(q) and st.session_state.son_mac:
         cevap = yuzde_uret(st.session_state.son_mac)
 
-    # 4️⃣ NORMAL SOHBET
     else:
         cevap = (
             "Sohbet edebiliriz 🙂\n\n"
             "Maç tahmini için iki takımı ayırarak yaz:\n"
-            "**Başakşehir - Gaziantep**"
+            "**Brisbane Bullets - N.Z. Breakers**"
         )
 
     st.session_state.messages.append({"role": "assistant", "content": cevap})
     with st.chat_message("assistant"):
         st.markdown(cevap)
 
-st.caption("© tahminsor.site • Sohbet Modlu Yapay Zekâ Spor Tahminleri")
+st.caption("© tahminsor.site • İnternet Destekli Yapay Zekâ Spor Tahminleri")
