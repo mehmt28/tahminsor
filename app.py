@@ -104,13 +104,13 @@ if user_input:
 
         if yon != ana:
             cevap = (
-                f"⚠ **{barem} {alt_ust}**, ana senaryoma ters.\n\n"
+                f"⚠ **{barem} {yon}**, ana senaryoma ters.\n\n"
                 "Tempo düşerse veya maç sertleşirse olabilir.\n"
                 "Yaklaşık olasılık: **%35–40**"
             )
         else:
             cevap = (
-                f"✅ **{barem} {alt_ust}**, ana senaryomla uyumlu.\n\n"
+                f"✅ **{barem} {yon}**, ana senaryomla uyumlu.\n\n"
                 "Yaklaşık olasılık: **%60–65**"
             )
 
