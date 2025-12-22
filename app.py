@@ -163,4 +163,34 @@ if user_input:
                 "Örn: Güney Kore basketbol ligi"
             )
 
-    # ------
+    # -------- 4️⃣ LİG BİLGİSİ --------
+    elif basket_ipucu(q) and st.session_state.bekleyen_mac:
+        mac = st.session_state.bekleyen_mac
+        ozet, detay, ana = basket_tahmin(mac)
+        st.session_state.son_mac = mac
+        st.session_state.son_tahmin = ana
+        st.session_state.son_detay = detay
+        st.session_state.bekleyen_mac = None
+        cevap = "Tamam 👍\n\n" + ozet
+
+    # -------- 5️⃣ DETAY --------
+    elif detay_sorusu(q) and st.session_state.son_mac:
+        cevap = st.session_state.son_detay
+
+    # -------- 6️⃣ YÜZDE --------
+    elif yuzde_sorusu(q) and st.session_state.son_mac:
+        cevap = "📊 Bu senaryo için güven aralığım **%60–65**."
+
+    # -------- 7️⃣ SOHBET --------
+    else:
+        cevap = (
+            "Sohbet edebiliriz 🙂\n\n"
+            "Maç tahmini için iki takımı ayırarak yaz:\n"
+            "**Anyang KGC - Samsung Thunders**"
+        )
+
+    st.session_state.messages.append({"role": "assistant", "content": cevap})
+    with st.chat_message("assistant"):
+        st.markdown(cevap)
+
+st.caption("© tahminsor.site • Yapay Zekâ Destekli Spor Tahmin Sohbeti")
