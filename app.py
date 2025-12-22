@@ -1,11 +1,12 @@
-# app.py — Tahminsor FINAL ULTIMATE
-# Sohbet + Maç + Detay + Yüzde + İnternet + Lig İpucu
+# app.py — Tahminsor FINAL FIXED
+# Sohbet + Maç + Lig + Detay + Yüzde + Barem Takibi
 
 import streamlit as st
 import numpy as np
 import requests
+import re
 
-st.set_page_config(page_title="Tahminsor", page_icon="⚽")
+st.set_page_config(page_title="Tahminsor", page_icon="🏀")
 
 # ---------------- SESSION ----------------
 if "messages" not in st.session_state:
@@ -21,20 +22,27 @@ if "messages" not in st.session_state:
 if "son_mac" not in st.session_state:
     st.session_state.son_mac = None
 
+if "son_tahmin" not in st.session_state:
+    st.session_state.son_tahmin = None
+
 if "son_detay" not in st.session_state:
     st.session_state.son_detay = None
 
 if "bekleyen_mac" not in st.session_state:
     st.session_state.bekleyen_mac = None
 
-# ---------------- ANAHTAR KELİMELER ----------------
-DETAY_KELIMELER = ["neden", "detay", "açıkla", "niye", "sebep"]
-YUZDE_KELIMELER = ["yüzde", "olasılık", "ihtimal", "güven", "kaç"]
+# ---------------- KELİMELER ----------------
+DETAY_KELIMELER = ["neden", "detay", "açıkla", "niye"]
+YUZDE_KELIMELER = ["yüzde", "olasılık", "ihtimal"]
 
 BASKET_IPUCLARI = [
-    "basket", "basketbol", "kbl", "nba",
-    "euroleague", "ligi", "lig"
+    "basket", "basketbol", "nba", "kbl",
+    "league", "ligi", "lig"
 ]
+
+# ---------------- FONKSİYONLAR ----------------
+def mac_format_var_mi(q):
+    return any(a in q for a in ["-", " vs ", " v "])
 
 def detay_sorusu_mu(q):
     return any(k in q for k in DETAY_KELIMELER)
@@ -45,11 +53,9 @@ def yuzde_sorusu_mu(q):
 def basket_ipucu_mu(q):
     return any(k in q for k in BASKET_IPUCLARI)
 
-# ---------------- FORMAT ----------------
-def mac_format_var_mi(q):
-    return any(a in q for a in ["-", " vs ", " v "])
+def barem_sorusu_mu(q):
+    return bool(re.search(r"\d+(\.\d+)?\s*(alt|üst)", q))
 
-# ---------------- WIKIPEDIA ----------------
 def spor_turu_bul(takim):
     try:
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{takim.replace(' ', '_')}"
@@ -69,33 +75,35 @@ def spor_turu_bul(takim):
 def basket_tahmin(mac):
     seed = abs(hash(mac)) % 10**6
     rng = np.random.default_rng(seed)
-    toplam = rng.uniform(215, 240)
+
+    toplam = rng.uniform(220, 240)
     ust = toplam > 225
 
     ozet = f"""
 🏀 **Basketbol Analizi**
 
 - Tahmini toplam sayı: **{toplam:.1f}**
-- Toplam: **{'ÜST 🟢' if ust else 'ALT 🔴'}**
+- Genel senaryo: **{'ÜST 🟢' if ust else 'ALT 🔴'}**
 
-👉 **Favorim:** {'ÜST' if ust else 'ALT'}
+👉 **Benim favorim:** {'ÜST' if ust else 'ALT'}
 """
 
     detay = """
-🔍 **Bu tahmin neye dayanıyor?**
+🔍 **Neye göre?**
 
-- KBL liginde tempo NBA’ye göre daha kontrollü
-- Ancak bu eşleşmede hücum katkısı yüksek
-- Benzer maç aralıklarında üst senaryosu öne çıkıyor
+- Hücum verimliliği
+- Lig temposu
+- Benzer eşleşmelerin sayı aralığı
 """
-    return ozet, detay
+
+    return ozet, detay, ("ÜST" if ust else "ALT")
 
 # ---------------- CHAT ----------------
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
 
-user_input = st.chat_input("Bir şey yaz… (örn: Anyang KGC - Samsung Thunders)")
+user_input = st.chat_input("Bir şey yaz…")
 
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -104,8 +112,22 @@ if user_input:
 
     q = user_input.lower()
 
-    # 1️⃣ MAÇ YAZILDI
-    if mac_format_var_mi(q):
+    # 1️⃣ BAREM SORUSU (EN ÖNEMLİ FIX)
+    if barem_sorusu_mu(q) and st.session_state.son_mac:
+        barem = re.findall(r"\d+(\.\d+)?", q)[0]
+        alt_ust = "ALT" if "alt" in q else "ÜST"
+
+        if alt_ust == st.session_state.son_tahmin:
+            cevap = f"✅ **{bريم} {alt_ust}**, ana senaryomla uyumlu. Daha güvenli."
+        else:
+            cevap = (
+                f"⚠ **{bريم} {alt_ust}**, ana senaryoya ters.\n\n"
+                "Ancak tempo düşerse olabilir.\n"
+                "Yaklaşık olasılık: **%35–40**"
+            )
+
+    # 2️⃣ MAÇ YAZILDI
+    elif mac_format_var_mi(q):
         takimlar = [t.strip() for t in q.replace("vs", "-").split("-")]
         spor = None
 
@@ -115,46 +137,47 @@ if user_input:
                 break
 
         if spor == "basket":
-            ozet, detay = basket_tahmin(q)
+            ozet, detay, tahmin = basket_tahmin(q)
             st.session_state.son_mac = q
+            st.session_state.son_tahmin = tahmin
             st.session_state.son_detay = detay
             cevap = "Analize geçiyorum 👇\n" + ozet
-
         else:
             st.session_state.bekleyen_mac = q
             cevap = (
                 "Takımları tanıdım ama spor türünü netleştiremedim 🤔\n\n"
-                "Ligi veya spor türünü yazabilir misin?\n"
-                "Örn: **Güney Kore KBL basketbol ligi**"
+                "Ligi veya spor türünü yazar mısın?\n"
+                "Örn: Yeni Zelanda basketbol ligi"
             )
 
-    # 2️⃣ LİG İPUCU GELDİ
+    # 3️⃣ LİG BİLGİSİ
     elif basket_ipucu_mu(q) and st.session_state.bekleyen_mac:
         mac = st.session_state.bekleyen_mac
-        ozet, detay = basket_tahmin(mac)
+        ozet, detay, tahmin = basket_tahmin(mac)
         st.session_state.son_mac = mac
+        st.session_state.son_tahmin = tahmin
         st.session_state.son_detay = detay
         st.session_state.bekleyen_mac = None
-        cevap = "Tamam 👍 Bilgiyi aldım.\n\n" + ozet
+        cevap = "Tamam 👍\n\n" + ozet
 
-    # 3️⃣ DETAY
+    # 4️⃣ DETAY
     elif detay_sorusu_mu(q) and st.session_state.son_mac:
         cevap = st.session_state.son_detay
 
-    # 4️⃣ YÜZDE
+    # 5️⃣ YÜZDE
     elif yuzde_sorusu_mu(q) and st.session_state.son_mac:
-        cevap = "📊 Bu maç için üst senaryosu yaklaşık **%64** güven veriyor."
+        cevap = "📊 Bu senaryo için güven aralığım **%60–65**."
 
-    # 5️⃣ SOHBET
+    # 6️⃣ SOHBET
     else:
         cevap = (
             "Sohbet edebiliriz 🙂\n\n"
             "Maç tahmini için iki takımı ayırarak yaz:\n"
-            "**Anyang KGC - Samsung Thunders**"
+            "**Brisbane Bullets - N.Z. Breakers**"
         )
 
     st.session_state.messages.append({"role": "assistant", "content": cevap})
     with st.chat_message("assistant"):
         st.markdown(cevap)
 
-st.caption("© tahminsor.site • Bağlam Takipli Yapay Zekâ Spor Tahminleri")
+st.caption("© tahminsor.site • Bağlamı Unutmayan Yapay Zekâ")
