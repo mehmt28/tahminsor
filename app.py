@@ -101,7 +101,7 @@ if user_input:
     # 2️⃣ DETAY SORUSU VE ÖNCEKİ MAÇ VARSA
     elif detay_sorusu_mu(q) and st.session_state.son_mac:
         cevap = st.session_state.son_tahmin
-        elif yuzde_sorusu_mu(q) and st.session_state.son_mac:
+    elif yuzde_sorusu_mu(q) and st.session_state.son_mac:
     cevap = yuzde_uret(st.session_state.son_mac)
 
 
