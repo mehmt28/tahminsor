@@ -39,6 +39,9 @@ DETAY_KELIMELER = ["neden", "detay", "açıkla", "niye", "sebep"]
 
 def detay_sorusu_mu(q):
     return any(k in q for k in DETAY_KELIMELER)
+    elif yuzde_sorusu_mu(q) and st.session_state.son_mac:
+    cevap = yuzde_uret(st.session_state.son_mac)
+
 
 # ---------------- TAHMİN ----------------
 def futbol_tahmin(mac):
