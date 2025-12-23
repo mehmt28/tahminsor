@@ -189,4 +189,4 @@ if st.session_state.son_tahmin:
     st.progress(g / 100)
     st.markdown(f"**%{g} güven**")
 
-st.caption("© tahminsor.site • Yapay Zekâ Destekli Spor Tahmin Sistemi")
+st.caption("© tahminsor.site • Yapay Zekâ Destekli Spor Tahmin Sistemi • Tahminler istatistiksel simülasyondur, kesinlik içermez")
