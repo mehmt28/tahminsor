@@ -85,37 +85,48 @@ def find_team_basket(name):
 # FUTBOL TAHMİN
 # =====================
 def futbol_tahmin(mac):
-    h, a = split_mac(mac)
-    hid, league = find_team_football(h)
-    aid, _ = find_team_football(a)
+    ev, dep = [x.strip() for x in re.split("[-–]", mac)]
 
-    if not hid or not aid:
-        return None
-
-    f = requests.get(
-        "https://v3.football.api-sports.io/fixtures",
+    # Takım ID bul (search ile)
+    t = requests.get(
+        "https://v3.football.api-sports.io/teams",
         headers=HEADERS,
-        params={"team": hid, "next": 1}
+        params={"search": ev}
     ).json()
 
-    if not f.get("response"):
+    if not t.get("response"):
         return None
 
-    fx = f["response"][0]
-    fid = fx["fixture"]["id"]
-    canli = fx["fixture"]["status"]["short"] != "NS"
+    team_id = t["response"][0]["team"]["id"]
 
+    # Prediction-first yaklaşım
     p = requests.get(
         "https://v3.football.api-sports.io/predictions",
         headers=HEADERS,
-        params={"fixture": fid}
+        params={"team": team_id}
     ).json()
 
-    pr = p["response"][0]["predictions"]["percent"]
+    if not p.get("response"):
+        return None
 
-    home = int(pr["home"][:-1])
-    draw = int(pr["draw"][:-1])
-    away = int(pr["away"][:-1])
+    hedef = normalize(dep)
+    secilen = None
+
+    for r in p["response"]:
+        h = normalize(r["teams"]["home"]["name"])
+        a = normalize(r["teams"]["away"]["name"])
+        if hedef in h or hedef in a:
+            secilen = r
+            break
+
+    if not secilen:
+        return None
+
+    perc = secilen["predictions"]["percent"]
+
+    home = int(perc["home"].replace("%", ""))
+    draw = int(perc["draw"].replace("%", ""))
+    away = int(perc["away"].replace("%", ""))
 
     secim, guven = max(
         [("Ev Sahibi", home), ("Beraberlik", draw), ("Deplasman", away)],
@@ -130,8 +141,9 @@ def futbol_tahmin(mac):
         "guven": guven,
         "oran": oran,
         "value": value_bet(guven, oran),
-        "canli": canli
+        "canli": False
     }
+
 
 
 # =====================
