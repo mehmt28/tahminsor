@@ -1,136 +1,186 @@
-# app.py — Tahminsor HYBRID ENGINE (FINAL)
-
+# app.py — TAHMINSOR FINAL (SEVİYE 16)
 import streamlit as st
 import requests
 import re
-from difflib import get_close_matches
 
-st.set_page_config(page_title="Tahminsor Hybrid", layout="wide")
+st.set_page_config(page_title="Tahminsor | Seviye 16", layout="wide")
 
 API_KEY = "2aafffec4c31cf146173e2064c6709d1"
-
 HEADERS = {"x-apisports-key": API_KEY}
 
+# =======================
+# API ENDPOINTS
+# =======================
 FOOT_FIX = "https://v3.football.api-sports.io/fixtures"
 FOOT_PRED = "https://v3.football.api-sports.io/predictions"
 
-# =====================
-# TEAM ALIAS / NORMALIZER
-# =====================
-TEAM_ALIASES = {
+BASKET_GAMES = "https://v1.basketball.api-sports.io/games"
+BASKET_PRED = "https://v1.basketball.api-sports.io/predictions"
+
+# =======================
+# TEAM ALIAS
+# =======================
+ALIASES = {
     "rkc genk": "genk",
     "krc genk": "genk",
     "club brugge": "club brugge kv",
     "man utd": "manchester united",
-    "newcastle utd": "newcastle",
+    "road warriors": "nlex road warriors",
+    "san miguel": "san miguel beermen",
 }
 
-def normalize_team(name):
-    name = name.lower().strip()
-    return TEAM_ALIASES.get(name, name)
+def norm(t):
+    return ALIASES.get(t.lower().strip(), t.lower().strip())
 
-def parse_match(q):
+def parse(q):
     if "-" not in q:
         return None, None
     h, a = q.split("-", 1)
-    return normalize_team(h), normalize_team(a)
+    return norm(h), norm(a)
 
-# =====================
-# FALLBACK MODEL (KESİN)
-# =====================
-def model_predict(home, away):
-    base = 55
-    diff = abs(len(home) - len(away)) * 2
+# =======================
+# SEVİYE 15 — VALUE + STAKE
+# =======================
+def implied_prob(odds):
+    return round((1 / odds) * 100, 1)
 
-    if len(home) > len(away):
-        return {
-            "secim": "Ev Sahibi",
-            "guven": min(65, base + diff),
-            "kaynak": "MODEL"
-        }
-    else:
-        return {
-            "secim": "Deplasman",
-            "guven": min(65, base + diff),
-            "kaynak": "MODEL"
-        }
+def is_value(model, odds):
+    return model > implied_prob(odds)
 
-# =====================
-# FOOTBALL API + HYBRID
-# =====================
-def football_predict(q):
-    home, away = parse_match(q)
-    if not home or not away:
-        return None
+def stake(guven):
+    if guven >= 65: return "3/10 🔥"
+    if guven >= 55: return "2/10 ⚠️"
+    return "1/10 ❄️"
 
-    # 1️⃣ FIXTURE SEARCH
-    r = requests.get(
-        FOOT_FIX,
-        headers=HEADERS,
-        params={"team": home, "next": 5}
-    ).json()
+def bar(p):
+    return "█" * int(p / 10) + "░" * (10 - int(p / 10))
+
+# =======================
+# FALLBACK MODEL
+# =======================
+def model(home, away):
+    g = 55 + abs(len(home) - len(away)) * 2
+    secim = "Ev Sahibi" if len(home) >= len(away) else "Deplasman"
+    return secim, min(68, g)
+
+# =======================
+# FUTBOL HYBRID
+# =======================
+def futbol(q):
+    home, away = parse(q)
+    if not home: return None
+
+    r = requests.get(FOOT_FIX, headers=HEADERS, params={"team": home, "next": 5}).json()
 
     if r.get("response"):
         for f in r["response"]:
-            teams = f["teams"]
-            if away in teams["away"]["name"].lower() or away in teams["home"]["name"].lower():
-                fix_id = f["fixture"]["id"]
+            fix_id = f["fixture"]["id"]
+            p = requests.get(FOOT_PRED, headers=HEADERS, params={"fixture": fix_id}).json()
+            if p.get("response"):
+                per = p["response"][0]["predictions"]["percent"]
+                h, d, a = int(per["home"][:-1]), int(per["draw"][:-1]), int(per["away"][:-1])
+                secim, guven = max(
+                    [("Ev Sahibi", h), ("Beraberlik", d), ("Deplasman", a)],
+                    key=lambda x: x[1]
+                )
+                odds = round(1 + (100 / guven), 2)
+                return secim, guven, odds, "API"
 
-                p = requests.get(
-                    FOOT_PRED,
-                    headers=HEADERS,
-                    params={"fixture": fix_id}
-                ).json()
+    secim, guven = model(home, away)
+    odds = round(1 + (100 / guven), 2)
+    return secim, guven, odds, "MODEL"
 
-                if p.get("response"):
-                    perc = p["response"][0]["predictions"]["percent"]
-                    h = int(perc["home"].replace("%", ""))
-                    d = int(perc["draw"].replace("%", ""))
-                    a = int(perc["away"].replace("%", ""))
+# =======================
+# BASKETBOL HYBRID
+# =======================
+def basket(q):
+    home, away = parse(q)
+    if not home: return None
 
-                    best = max(
-                        [("Ev Sahibi", h), ("Beraberlik", d), ("Deplasman", a)],
-                        key=lambda x: x[1]
-                    )
+    r = requests.get(
+        BASKET_GAMES,
+        headers=HEADERS,
+        params={"team": home, "season": 2024}
+    ).json()
 
-                    return {
-                        "secim": best[0],
-                        "guven": best[1],
-                        "kaynak": "API"
-                    }
+    if r.get("response"):
+        g = r["response"][0]["id"]
+        p = requests.get(
+            BASKET_PRED,
+            headers=HEADERS,
+            params={"game": g}
+        ).json()
 
-    # 2️⃣ FALLBACK
-    return model_predict(home, away)
+        if p.get("response"):
+            h = int(p["response"][0]["percent"]["home"][:-1])
+            a = 100 - h
+            secim = "Ev Sahibi" if h > a else "Deplasman"
+            guven = max(h, a)
+            odds = round(1 + (100 / guven), 2)
+            return secim, guven, odds, "API"
 
-# =====================
+    secim, guven = model(home, away)
+    odds = round(1 + (100 / guven), 2)
+    return secim, guven, odds, "MODEL"
+
+# =======================
+# SESSION
+# =======================
+for k in ["chat", "kupon"]:
+    if k not in st.session_state:
+        st.session_state[k] = []
+
+# =======================
 # UI
-# =====================
-st.title("⚽ Tahminsor Hybrid (API + MODEL)")
+# =======================
+left, right = st.columns([3,1])
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+with left:
+    st.title("💬 Tahminsor | Seviye 16")
+    for m in st.session_state.chat:
+        with st.chat_message(m["r"]):
+            st.markdown(m["c"])
 
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
+    q = st.chat_input("Maç yaz: Genk - Club Brugge / Road Warriors - San Miguel")
 
-q = st.chat_input("Maç yaz: Genk - Club Brugge")
+    if q:
+        st.session_state.chat.append({"r":"user","c":q})
 
-if q:
-    st.session_state.messages.append({"role": "user", "content": q})
+        engine = basket if any(x in q.lower() for x in ["warriors","beermen"]) else futbol
+        r = engine(q)
 
-    t = football_predict(q)
+        if not r:
+            msg = "❌ Format hatası"
+        else:
+            secim, guven, odds, src = r
+            val = is_value(guven, odds)
 
-    if not t:
-        msg = "❌ Format hatası"
+            msg = (
+                f"👉 **{secim}**\n\n"
+                f"📊 Güven: %{guven} {bar(guven)}\n"
+                f"💰 Oran: {odds}\n"
+                f"🎯 Value: {'🟢 VAR' if val else '🔴 YOK'}\n"
+                f"🔥 Stake: {stake(guven)}\n"
+                f"🧠 Kaynak: {src}\n\n"
+                f"**kupon ekle** yazabilirsin"
+            )
+
+            st.session_state.last = (q, secim, odds, guven, val)
+
+        st.session_state.chat.append({"r":"assistant","c":msg})
+        with st.chat_message("assistant"):
+            st.markdown(msg)
+
+        if "kupon ekle" in q.lower() and "last" in st.session_state:
+            st.session_state.kupon.append(st.session_state.last)
+
+with right:
+    st.markdown("## 🧾 Kupon")
+    if not st.session_state.kupon:
+        st.info("Kupon boş")
     else:
-        msg = (
-            f"### ⚽ Maç Analizi\n"
-            f"👉 Tahmin: **{t['secim']}**\n"
-            f"📊 Güven: **%{t['guven']}**\n"
-            f"🧠 Kaynak: **{t['kaynak']}**"
-        )
-
-    st.session_state.messages.append({"role": "assistant", "content": msg})
-    with st.chat_message("assistant"):
-        st.markdown(msg)
+        tot = 1
+        for i,k in enumerate(st.session_state.kupon,1):
+            tot *= k[2]
+            st.markdown(f"{i}. {k[0]} → {k[1]} ({k[2]})")
+        st.markdown(f"### 💰 Toplam Oran: {round(tot,2)}")
