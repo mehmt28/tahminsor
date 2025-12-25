@@ -6,18 +6,13 @@ import re
 st.set_page_config(page_title="Tahminsor | Gerçek Tahmin", layout="wide")
 
 # =====================
-# API AYARLARI
+# API
 # =====================
 API_KEY = "2aafffec4c31cf146173e2064c6709d1"
-
-HEADERS = {
-    "x-apisports-key": API_KEY
-}
+HEADERS = {"x-apisports-key": API_KEY}
 
 API_FOOT_FIX = "https://v3.football.api-sports.io/fixtures"
 API_FOOT_PRED = "https://v3.football.api-sports.io/predictions"
-API_FOOT_ODDS = "https://v3.football.api-sports.io/odds"
-
 API_BASKET_GAMES = "https://v1.basketball.api-sports.io/games"
 API_BASKET_PRED = "https://v1.basketball.api-sports.io/predictions"
 
@@ -33,42 +28,28 @@ def implied_prob(oran):
 def value_bet(model_pct, oran):
     return model_pct > implied_prob(oran)
 
-def spor_turu_belirle(mac):
-    basket_ipucu = ["kgc", "thunders", "bullets", "breakers", "lakers", "warriors"]
-    m = mac.lower()
-    for k in basket_ipucu:
-        if k in m:
-            return "basketbol"
-    return "futbol"
-
 def guven_bar(pct):
     bars = int(pct / 10)
     return "█" * bars + "░" * (10 - bars)
+
+def spor_belirle(mac):
+    basket_ipucu = ["kgc", "thunders", "bullets", "breakers"]
+    m = mac.lower()
+    return "basketbol" if any(x in m for x in basket_ipucu) else "futbol"
 
 # =====================
 # FUTBOL
 # =====================
 def futbol_tahmin(mac):
-    home, away = [x.strip() for x in re.split("[-–]", mac)]
+    home, _ = [x.strip() for x in re.split("[-–]", mac)]
 
-    f = requests.get(
-        API_FOOT_FIX,
-        headers=HEADERS,
-        params={"team": home, "next": 1}
-    ).json()
-
+    f = requests.get(API_FOOT_FIX, headers=HEADERS, params={"team": home, "next": 1}).json()
     if not f.get("response"):
         return None
 
-    fix = f["response"][0]
-    fix_id = fix["fixture"]["id"]
+    fix_id = f["response"][0]["fixture"]["id"]
 
-    p = requests.get(
-        API_FOOT_PRED,
-        headers=HEADERS,
-        params={"fixture": fix_id}
-    ).json()
-
+    p = requests.get(API_FOOT_PRED, headers=HEADERS, params={"fixture": fix_id}).json()
     if not p.get("response"):
         return None
 
@@ -77,27 +58,12 @@ def futbol_tahmin(mac):
     draw_pct = int(perc["draw"].replace("%", ""))
     away_pct = int(perc["away"].replace("%", ""))
 
-    odds_r = requests.get(
-        API_FOOT_ODDS,
-        headers=HEADERS,
-        params={"fixture": fix_id, "bet": 1}
-    ).json()
-
-    odds = {"Ev Sahibi": 2.5, "Beraberlik": 3.0, "Deplasman": 2.8}
-
-    try:
-        values = odds_r["response"][0]["bookmakers"][0]["bets"][0]["values"]
-        for v in values:
-            odds[v["value"]] = float(v["odd"])
-    except:
-        pass
-
     secim, guven = max(
         [("Ev Sahibi", home_pct), ("Beraberlik", draw_pct), ("Deplasman", away_pct)],
         key=lambda x: x[1]
     )
 
-    oran = odds.get(secim, 2.5)
+    oran = round(1 + (100 / guven), 2)
     value = value_bet(guven, oran)
 
     return {
@@ -112,7 +78,7 @@ def futbol_tahmin(mac):
 # BASKETBOL
 # =====================
 def basketbol_tahmin(mac):
-    home, away = [x.strip() for x in re.split("[-–]", mac)]
+    home, _ = [x.strip() for x in re.split("[-–]", mac)]
 
     g = requests.get(
         API_BASKET_GAMES,
@@ -123,15 +89,9 @@ def basketbol_tahmin(mac):
     if not g.get("response"):
         return None
 
-    game = g["response"][0]
-    game_id = game["id"]
+    game_id = g["response"][0]["id"]
 
-    p = requests.get(
-        API_BASKET_PRED,
-        headers=HEADERS,
-        params={"game": game_id}
-    ).json()
-
+    p = requests.get(API_BASKET_PRED, headers=HEADERS, params={"game": game_id}).json()
     if not p.get("response"):
         return None
 
@@ -166,7 +126,7 @@ left, right = st.columns([3, 1])
 
 with left:
     st.title("💬 Tahminsor")
-    st.caption("Gerçek API • Value Bet • Otomatik Spor Algılama")
+    st.caption("Gerçek API • Value Bet • Stabil Sürüm")
 
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
@@ -179,8 +139,7 @@ with left:
 
         if mac_format(q):
             st.session_state.aktif_mac = q
-            spor = spor_turu_belirle(q)
-
+            spor = spor_belirle(q)
             t = basketbol_tahmin(q) if spor == "basketbol" else futbol_tahmin(q)
 
             if not t:
@@ -199,7 +158,10 @@ with left:
         elif "kupon ekle" in q.lower() and st.session_state.son:
             st.session_state.kupon.append({
                 "mac": st.session_state.aktif_mac,
-                **st.session_state.son
+                "secim": st.session_state.son.get("secim"),
+                "oran": st.session_state.son.get("oran"),
+                "guven": st.session_state.son.get("guven"),
+                "value": st.session_state.son.get("value", False)
             })
             cevap = "✅ Kupona eklendi"
 
@@ -218,12 +180,12 @@ with right:
     else:
         toplam_oran = 1
         for i, k in enumerate(st.session_state.kupon, 1):
-            toplam_oran *= k["oran"]
+            toplam_oran *= k.get("oran", 1)
             st.markdown(
                 f"{i}. {k['mac']} → {k['secim']} ({k['oran']}) "
-                f"{'🟢' if k['value'] else ''}"
+                f"{'🟢' if k.get('value', False) else ''}"
             )
 
         st.markdown(f"### 💰 Toplam Oran: {round(toplam_oran, 2)}")
 
-st.caption("© Tahminsor | Test Sürümü")
+st.caption("© Tahminsor | Stabil Final")
