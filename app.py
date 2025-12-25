@@ -17,6 +17,25 @@ API_BASKET_GAMES = "https://v1.basketball.api-sports.io/games"
 API_BASKET_PRED = "https://v1.basketball.api-sports.io/predictions"
 
 # =====================
+# TAKIM ALIAS (ÇOK KRİTİK)
+# =====================
+TEAM_ALIASES = {
+    "man utd": "Manchester United",
+    "man.utd": "Manchester United",
+    "newcastle utd": "Newcastle United",
+    "genk": "KRC Genk",
+    "club brugge": "Club Brugge KV",
+    "road warriors": "NLEX Road Warriors",
+    "san miguel": "San Miguel Beermen",
+    "al jabalin": "Al-Jabalain",
+    "al ula": "Al-Ula FC"
+}
+
+def normalize_team(name):
+    n = name.lower().strip()
+    return TEAM_ALIASES.get(n, name)
+
+# =====================
 # YARDIMCI
 # =====================
 def mac_format(q):
@@ -33,7 +52,7 @@ def guven_bar(pct):
     return "█" * bars + "░" * (10 - bars)
 
 def spor_belirle(mac):
-    basket_ipucu = ["kgc", "thunders", "bullets", "breakers"]
+    basket_ipucu = ["kgc", "thunders", "bullets", "breakers", "warriors"]
     m = mac.lower()
     return "basketbol" if any(x in m for x in basket_ipucu) else "futbol"
 
@@ -41,7 +60,7 @@ def spor_belirle(mac):
 # FUTBOL
 # =====================
 def futbol_tahmin(mac):
-    home, _ = [x.strip() for x in re.split("[-–]", mac)]
+    home, _ = [normalize_team(x.strip()) for x in re.split("[-–]", mac)]
 
     f = requests.get(API_FOOT_FIX, headers=HEADERS, params={"team": home, "next": 1}).json()
     if not f.get("response"):
@@ -78,7 +97,7 @@ def futbol_tahmin(mac):
 # BASKETBOL
 # =====================
 def basketbol_tahmin(mac):
-    home, _ = [x.strip() for x in re.split("[-–]", mac)]
+    home, _ = [normalize_team(x.strip()) for x in re.split("[-–]", mac)]
 
     g = requests.get(
         API_BASKET_GAMES,
@@ -126,7 +145,7 @@ left, right = st.columns([3, 1])
 
 with left:
     st.title("💬 Tahminsor")
-    st.caption("Gerçek API • Value Bet • Stabil Sürüm")
+    st.caption("Alias Destekli • Gerçek API • Stabil Final")
 
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
@@ -143,7 +162,7 @@ with left:
             t = basketbol_tahmin(q) if spor == "basketbol" else futbol_tahmin(q)
 
             if not t:
-                cevap = "❌ Veri bulunamadı"
+                cevap = "❌ Veri bulunamadı (takım adı farklı olabilir)"
             else:
                 st.session_state.son = t
                 cevap = (
@@ -158,9 +177,9 @@ with left:
         elif "kupon ekle" in q.lower() and st.session_state.son:
             st.session_state.kupon.append({
                 "mac": st.session_state.aktif_mac,
-                "secim": st.session_state.son.get("secim"),
-                "oran": st.session_state.son.get("oran"),
-                "guven": st.session_state.son.get("guven"),
+                "secim": st.session_state.son["secim"],
+                "oran": st.session_state.son["oran"],
+                "guven": st.session_state.son["guven"],
                 "value": st.session_state.son.get("value", False)
             })
             cevap = "✅ Kupona eklendi"
@@ -180,12 +199,12 @@ with right:
     else:
         toplam_oran = 1
         for i, k in enumerate(st.session_state.kupon, 1):
-            toplam_oran *= k.get("oran", 1)
+            toplam_oran *= k["oran"]
             st.markdown(
                 f"{i}. {k['mac']} → {k['secim']} ({k['oran']}) "
-                f"{'🟢' if k.get('value', False) else ''}"
+                f"{'🟢' if k.get('value') else ''}"
             )
 
         st.markdown(f"### 💰 Toplam Oran: {round(toplam_oran, 2)}")
 
-st.caption("© Tahminsor | Stabil Final")
+st.caption("© Tahminsor | Final Stabil")
