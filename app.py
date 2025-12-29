@@ -58,41 +58,54 @@ def hybrid_match(team, team_list):
     return None
 
 # ---------------- API FUNCTIONS ----------------
-def get_football_fixture(home, away):
-    url = "https://v3.football.api-sports.io/teams"
-    res = requests.get(url, headers=HEADERS).json()
-
-    teams = [t["team"]["name"] for t in res["response"]]
-
-    h = hybrid_match(home, teams)
-    a = hybrid_match(away, teams)
-
-    if not h or not a:
-        return None
-
-    return {
-        "home": h,
-        "away": a,
-        "sport": "Futbol"
+def find_fixture_football(home, away):
+    url = "https://v3.football.api-sports.io/fixtures"
+    params = {
+        "from": datetime.now().strftime("%Y-%m-%d"),
+        "to": (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
     }
 
-def get_basketball_fixture(home, away):
-    url = "https://v1.basketball.api-sports.io/teams"
-    res = requests.get(url, headers=HEADERS).json()
-
-    teams = [t["name"] for t in res["response"]]
-
-    h = hybrid_match(home, teams)
-    a = hybrid_match(away, teams)
-
-    if not h or not a:
+    res = requests.get(url, headers=HEADERS, params=params).json()
+    if not res.get("response"):
         return None
 
-    return {
-        "home": h,
-        "away": a,
-        "sport": "Basketbol"
-    }
+    def norm(t):
+        return t.lower().replace(".", "").replace("-", "").replace(" ", "")
+
+    h, a = norm(home), norm(away)
+
+    for f in res["response"]:
+        fh = norm(f["teams"]["home"]["name"])
+        fa = norm(f["teams"]["away"]["name"])
+
+        if h in fh and a in fa or h in fa and a in fh:
+            return f
+
+    return None
+
+
+def find_fixture_basket(home, away):
+    url = "https://v1.basketball.api-sports.io/games"
+    params = {"season": 2024}
+
+    res = requests.get(url, headers=HEADERS, params=params).json()
+    if not res.get("response"):
+        return None
+
+    def norm(t):
+        return t.lower().replace(".", "").replace("-", "").replace(" ", "")
+
+    h, a = norm(home), norm(away)
+
+    for g in res["response"]:
+        gh = norm(g["teams"]["home"]["name"])
+        ga = norm(g["teams"]["away"]["name"])
+
+        if h in gh and a in ga or h in ga and a in gh:
+            return g
+
+    return None
+
 
 # ---------------- SESSION ----------------
 if "kupon" not in st.session_state:
