@@ -2,39 +2,27 @@ import streamlit as st
 import random
 
 # -------------------------------------------------
-# SAYFA
+# PAGE
 # -------------------------------------------------
 st.set_page_config("TahminSor", layout="wide")
 
 # -------------------------------------------------
-# CSS
+# STYLE
 # -------------------------------------------------
 st.markdown("""
 <style>
-body { background:#f4f6f8; }
-.block-container { padding-top:1rem; }
-
+body { background:#f5f6fa; }
 .card {
     background:#fff;
     padding:12px;
     border-radius:10px;
     margin-bottom:10px;
-    box-shadow:0 0 8px rgba(0,0,0,.08);
+    box-shadow:0 2px 6px rgba(0,0,0,.1);
 }
-
 .good { color:green; }
 .bad { color:red; }
-
-.bar {
-    background:#eee;
-    border-radius:6px;
-    height:10px;
-}
-.fill {
-    background:#2ecc71;
-    height:10px;
-    border-radius:6px;
-}
+.bar { background:#ddd; height:8px; border-radius:6px; }
+.fill { background:#27ae60; height:8px; border-radius:6px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -44,77 +32,83 @@ body { background:#f4f6f8; }
 if "kupon" not in st.session_state:
     st.session_state.kupon = []
 
-if "aliases" not in st.session_state:
-    st.session_state.aliases = {
-        "genk": "krc genk",
-        "rkc genk": "krc genk",
-        "club brugge": "club brugge kv",
-        "man utd": "manchester united",
-        "road warriors": "nlex road warriors",
-        "san miguel": "san miguel beermen"
-    }
+# -------------------------------------------------
+# DATA (MOCK)
+# -------------------------------------------------
+FOOTBALL = [
+    "krc genk",
+    "club brugge kv",
+    "manchester united",
+    "newcastle united",
+    "sakaryaspor a s",
+    "manisa futbol kulubu"
+]
+
+BASKETBALL = [
+    "nlex road warriors",
+    "san miguel beermen"
+]
+
+ALIASES = {
+    "genk": "krc genk",
+    "rkc genk": "krc genk",
+    "club brugge": "club brugge kv",
+    "man utd": "manchester united",
+    "road warriors": "nlex road warriors",
+    "san miguel": "san miguel beermen",
+    "manisa fk": "manisa futbol kulubu"
+}
 
 # -------------------------------------------------
-# NORMALIZE
+# HELPERS
 # -------------------------------------------------
-def n(t):
+def normalize(t):
     return t.lower().replace(".", "").replace("-", " ").strip()
 
-# -------------------------------------------------
-# SPORT DETECT
-# -------------------------------------------------
-def detect_sport(text):
-    b = ["nba","basket","warriors","beermen","lakers","celtics"]
-    return "basketball" if any(x in n(text) for x in b) else "football"
+def detect_sport(txt):
+    b = ["warriors","beermen","nba"]
+    return "basketball" if any(x in normalize(txt) for x in b) else "football"
 
-# -------------------------------------------------
-# MOCK API DATA
-# -------------------------------------------------
-FOOTBALL = ["krc genk","club brugge kv","manchester united","sakaryaspor a s","manisa futbol kulubu"]
-BASKETBALL = ["nlex road warriors","san miguel beermen"]
+def match_score(a, b):
+    sa = set(normalize(a).split())
+    sb = set(normalize(b).split())
+    return len(sa & sb) / max(len(sa), len(sb))
 
-# -------------------------------------------------
-# FIND TEAM (HYBRID)
-# -------------------------------------------------
-def find_team(user, pool):
-    u = n(user)
-    u = st.session_state.aliases.get(u, u)
+def find_team(user_input, pool):
+    u = normalize(user_input)
+    u = normalize(ALIASES.get(u, u))
 
-    for t in pool:
-        if u == n(t):
-            return t
+    best = None
+    best_score = 0
 
-    for t in pool:
-        if u in n(t) or n(t) in u:
-            return t
+    for team in pool:
+        score = match_score(u, team)
+        if score > best_score:
+            best = team
+            best_score = score
 
-    return None
+    return best if best_score >= 0.5 else None
 
-# -------------------------------------------------
-# TAHMİN MOTORU
-# -------------------------------------------------
 def predict():
     home = random.randint(30,45)
     draw = random.randint(20,30)
     away = 100 - home - draw
-
-    winner = max(
+    pick = max(
         [("Ev Sahibi",home),("Beraberlik",draw),("Deplasman",away)],
         key=lambda x:x[1]
     )
-
-    confidence = winner[1]
-    return winner[0], confidence, home, draw, away
+    return pick[0], pick[1]
 
 # -------------------------------------------------
 # UI
 # -------------------------------------------------
 st.title("⚽🏀 TahminSor")
 
-col1, col2 = st.columns([2,1])
+left, right = st.columns([2,1])
 
-with col1:
+with left:
     match = st.text_input("Maç gir (örn: genk - club brugge)")
+
     if st.button("Kupona Ekle"):
         try:
             a,b = match.split("-")
@@ -124,24 +118,19 @@ with col1:
             t1 = find_team(a, pool)
             t2 = find_team(b, pool)
 
-            ok = bool(t1 and t2)
-
-            tahmin, conf, h,d,aw = predict()
+            tahmin, guven = predict()
 
             st.session_state.kupon.append({
                 "match": f"{t1 or a.strip()} - {t2 or b.strip()}",
+                "ok": bool(t1 and t2),
                 "sport": sport,
-                "ok": ok,
                 "tahmin": tahmin,
-                "conf": conf
+                "guven": guven
             })
         except:
             st.warning("Format: takım1 - takım2")
 
-# -------------------------------------------------
-# KUPON
-# -------------------------------------------------
-with col2:
+with right:
     st.subheader("🧾 Kupon")
 
     if not st.session_state.kupon:
@@ -156,9 +145,9 @@ with col2:
                     {"🟢 Veri bulundu" if k['ok'] else "❌ Veri bulunamadı"}
                 </span><br><br>
                 <b>Öneri:</b> {k['tahmin']}<br>
-                <small>Güven: %{k['conf']}</small>
+                <small>Güven: %{k['guven']}</small>
                 <div class="bar">
-                    <div class="fill" style="width:{k['conf']}%"></div>
+                    <div class="fill" style="width:{k['guven']}%"></div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
