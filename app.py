@@ -1,215 +1,164 @@
-# app.py
 import streamlit as st
-import requests
-import re
+import random
 
-st.set_page_config(page_title="Tahminsor", layout="wide")
+# -------------------------------------------------
+# SAYFA
+# -------------------------------------------------
+st.set_page_config("TahminSor", layout="wide")
 
-API_KEY = "2aafffec4c31cf146173e2064c6709d1"
-HEADERS = {"x-apisports-key": API_KEY}
+# -------------------------------------------------
+# CSS
+# -------------------------------------------------
+st.markdown("""
+<style>
+body { background:#f4f6f8; }
+.block-container { padding-top:1rem; }
 
-FOOT_TEAMS = "https://v3.football.api-sports.io/teams"
-FOOT_FIX = "https://v3.football.api-sports.io/fixtures"
-FOOT_PRED = "https://v3.football.api-sports.io/predictions"
+.card {
+    background:#fff;
+    padding:12px;
+    border-radius:10px;
+    margin-bottom:10px;
+    box-shadow:0 0 8px rgba(0,0,0,.08);
+}
 
-BASK_TEAMS = "https://v1.basketball.api-sports.io/teams"
-BASK_GAMES = "https://v1.basketball.api-sports.io/games"
-BASK_PRED = "https://v1.basketball.api-sports.io/predictions"
+.good { color:green; }
+.bad { color:red; }
 
+.bar {
+    background:#eee;
+    border-radius:6px;
+    height:10px;
+}
+.fill {
+    background:#2ecc71;
+    height:10px;
+    border-radius:6px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# ---------------------------
-# UTIL
-# ---------------------------
-def mac_format(q):
-    return bool(re.search(r".+\s*[-–]\s*.+", q))
-
-
-def search_team_football(name):
-    r = requests.get(
-        FOOT_TEAMS,
-        headers=HEADERS,
-        params={"search": name}
-    ).json()
-    if r.get("response"):
-        return r["response"][0]["team"]["id"]
-    return None
-
-
-def search_team_basket(name):
-    r = requests.get(
-        BASK_TEAMS,
-        headers=HEADERS,
-        params={"search": name}
-    ).json()
-    if r.get("response"):
-        return r["response"][0]["id"]
-    return None
-
-
-# ---------------------------
-# FUTBOL
-# ---------------------------
-def futbol_tahmin(mac):
-    home, away = [x.strip() for x in re.split("[-–]", mac)]
-
-    home_id = search_team_football(home)
-    if not home_id:
-        return None
-
-    f = requests.get(
-        FOOT_FIX,
-        headers=HEADERS,
-        params={"team": home_id, "next": 1}
-    ).json()
-
-    if not f.get("response"):
-        return None
-
-    fix = f["response"][0]
-    fid = fix["fixture"]["id"]
-
-    p = requests.get(
-        FOOT_PRED,
-        headers=HEADERS,
-        params={"fixture": fid}
-    ).json()
-
-    if not p.get("response"):
-        return None
-
-    pr = p["response"][0]["predictions"]["percent"]
-    h = int(pr["home"].replace("%", ""))
-    d = int(pr["draw"].replace("%", ""))
-    a = int(pr["away"].replace("%", ""))
-
-    secim = max(
-        [("Ev Sahibi", h), ("Beraberlik", d), ("Deplasman", a)],
-        key=lambda x: x[1]
-    )
-
-    return {
-        "spor": "futbol",
-        "secim": secim[0],
-        "guven": secim[1]
-    }
-
-
-# ---------------------------
-# BASKETBOL
-# ---------------------------
-def basketbol_tahmin(mac):
-    home, away = [x.strip() for x in re.split("[-–]", mac)]
-
-    home_id = search_team_basket(home)
-    if not home_id:
-        return None
-
-    g = requests.get(
-        BASK_GAMES,
-        headers=HEADERS,
-        params={"team": home_id, "season": 2024}
-    ).json()
-
-    if not g.get("response"):
-        return None
-
-    game = g["response"][0]
-    gid = game["id"]
-
-    p = requests.get(
-        BASK_PRED,
-        headers=HEADERS,
-        params={"game": gid}
-    ).json()
-
-    if not p.get("response"):
-        return None
-
-    pr = p["response"][0]["percent"]
-    h = int(pr["home"].replace("%", ""))
-    a = 100 - h
-
-    secim = "Ev Sahibi" if h > a else "Deplasman"
-
-    return {
-        "spor": "basketbol",
-        "secim": secim,
-        "guven": max(h, a)
-    }
-
-
-# ---------------------------
+# -------------------------------------------------
 # SESSION
-# ---------------------------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# -------------------------------------------------
 if "kupon" not in st.session_state:
     st.session_state.kupon = []
-if "son" not in st.session_state:
-    st.session_state.son = None
-if "aktif_mac" not in st.session_state:
-    st.session_state.aktif_mac = None
 
+if "aliases" not in st.session_state:
+    st.session_state.aliases = {
+        "genk": "krc genk",
+        "rkc genk": "krc genk",
+        "club brugge": "club brugge kv",
+        "man utd": "manchester united",
+        "road warriors": "nlex road warriors",
+        "san miguel": "san miguel beermen"
+    }
 
-# ---------------------------
+# -------------------------------------------------
+# NORMALIZE
+# -------------------------------------------------
+def n(t):
+    return t.lower().replace(".", "").replace("-", " ").strip()
+
+# -------------------------------------------------
+# SPORT DETECT
+# -------------------------------------------------
+def detect_sport(text):
+    b = ["nba","basket","warriors","beermen","lakers","celtics"]
+    return "basketball" if any(x in n(text) for x in b) else "football"
+
+# -------------------------------------------------
+# MOCK API DATA
+# -------------------------------------------------
+FOOTBALL = ["krc genk","club brugge kv","manchester united","sakaryaspor a s","manisa futbol kulubu"]
+BASKETBALL = ["nlex road warriors","san miguel beermen"]
+
+# -------------------------------------------------
+# FIND TEAM (HYBRID)
+# -------------------------------------------------
+def find_team(user, pool):
+    u = n(user)
+    u = st.session_state.aliases.get(u, u)
+
+    for t in pool:
+        if u == n(t):
+            return t
+
+    for t in pool:
+        if u in n(t) or n(t) in u:
+            return t
+
+    return None
+
+# -------------------------------------------------
+# TAHMİN MOTORU
+# -------------------------------------------------
+def predict():
+    home = random.randint(30,45)
+    draw = random.randint(20,30)
+    away = 100 - home - draw
+
+    winner = max(
+        [("Ev Sahibi",home),("Beraberlik",draw),("Deplasman",away)],
+        key=lambda x:x[1]
+    )
+
+    confidence = winner[1]
+    return winner[0], confidence, home, draw, away
+
+# -------------------------------------------------
 # UI
-# ---------------------------
-left, right = st.columns([3, 1])
+# -------------------------------------------------
+st.title("⚽🏀 TahminSor")
 
-with left:
-    st.title("💬 Tahminsor")
-    st.caption("Takım yaz • Sistem bulsun • Tahmin üretelim")
+col1, col2 = st.columns([2,1])
 
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
+with col1:
+    match = st.text_input("Maç gir (örn: genk - club brugge)")
+    if st.button("Kupona Ekle"):
+        try:
+            a,b = match.split("-")
+            sport = detect_sport(match)
+            pool = BASKETBALL if sport=="basketball" else FOOTBALL
 
-    q = st.chat_input("Örnek: Genk - Club Brugge")
+            t1 = find_team(a, pool)
+            t2 = find_team(b, pool)
 
-    if q:
-        st.session_state.messages.append({"role": "user", "content": q})
+            ok = bool(t1 and t2)
 
-        cevap = "Sohbet edebiliriz 🙂"
+            tahmin, conf, h,d,aw = predict()
 
-        if mac_format(q):
-            st.session_state.aktif_mac = q
-
-            t = futbol_tahmin(q)
-            if not t:
-                t = basketbol_tahmin(q)
-
-            if not t:
-                cevap = "❌ Veri bulunamadı (lig / takım adı uyuşmuyor)"
-            else:
-                st.session_state.son = t
-                cevap = (
-                    f"🏟 Spor: **{t['spor'].upper()}**\n\n"
-                    f"👉 Tahmin: **{t['secim']}**\n"
-                    f"📊 Güven: %{t['guven']}\n\n"
-                    f"Kupona eklemek için **kupon ekle** yaz"
-                )
-
-        elif "kupon ekle" in q.lower() and st.session_state.son:
             st.session_state.kupon.append({
-                "mac": st.session_state.aktif_mac,
-                **st.session_state.son
+                "match": f"{t1 or a.strip()} - {t2 or b.strip()}",
+                "sport": sport,
+                "ok": ok,
+                "tahmin": tahmin,
+                "conf": conf
             })
-            cevap = "✅ Tahmin kupona eklendi"
+        except:
+            st.warning("Format: takım1 - takım2")
 
-        st.session_state.messages.append({"role": "assistant", "content": cevap})
-        with st.chat_message("assistant"):
-            st.markdown(cevap)
-
-with right:
-    st.markdown("## 🧾 Kupon")
+# -------------------------------------------------
+# KUPON
+# -------------------------------------------------
+with col2:
+    st.subheader("🧾 Kupon")
 
     if not st.session_state.kupon:
         st.info("Kupon boş")
     else:
-        for i, k in enumerate(st.session_state.kupon, 1):
-            st.markdown(
-                f"**{i}. {k['mac']}**  \n"
-                f"{k['spor']} → {k['secim']} (%{k['guven']})"
-            )
-
-st.caption("© Tahminsor | Faz 1 – Hybrid Team Matching")
+        for k in st.session_state.kupon:
+            st.markdown(f"""
+            <div class="card">
+                <b>{k['match']}</b><br>
+                <small>{k['sport'].upper()}</small><br>
+                <span class="{ 'good' if k['ok'] else 'bad' }">
+                    {"🟢 Veri bulundu" if k['ok'] else "❌ Veri bulunamadı"}
+                </span><br><br>
+                <b>Öneri:</b> {k['tahmin']}<br>
+                <small>Güven: %{k['conf']}</small>
+                <div class="bar">
+                    <div class="fill" style="width:{k['conf']}%"></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
