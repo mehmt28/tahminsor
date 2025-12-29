@@ -1,249 +1,169 @@
-# app.py
-# TAHMINSOR – FINAL BUILD + MOBILE UI
-
 import streamlit as st
 import requests
-import re
-import random
+from difflib import get_close_matches
 
-# =====================
-# SAYFA AYAR
-# =====================
+# ---------------- CONFIG ----------------
 st.set_page_config(
-    page_title="Tahminsor",
+    page_title="TahminSor AI",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# =====================
-# MOBİL UI CSS
-# =====================
+API_KEY = "2aafffec4c31cf146173e2064c6709d1"
+
+HEADERS = {
+    "x-apisports-key": API_KEY
+}
+
+# ---------------- STYLE ----------------
 st.markdown("""
 <style>
-/* Mobil uyum */
-@media (max-width: 768px) {
-    .block-container {
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-    h1 { font-size: 1.4rem; }
-    h2 { font-size: 1.2rem; }
-    h3 { font-size: 1.05rem; }
+body {
+    background-color: #f5f6fa;
 }
-
-/* Chat mesajları */
-.stChatMessage {
-    border-radius: 14px;
-    padding: 0.6rem;
+.block-container {
+    padding-top: 1rem;
 }
-
-/* Input yukarı yakın */
-.stChatInputContainer {
-    position: sticky;
-    bottom: 0;
-    background: #0e1117;
-    padding-top: 0.5rem;
-}
-
-/* Kupon kart */
-.kupon-card {
-    background: #161b22;
+.kupon-box {
+    background-color: #ffffff;
+    padding: 15px;
     border-radius: 12px;
-    padding: 10px;
+    border: 1px solid #ddd;
+    margin-bottom: 10px;
+}
+.match-box {
+    background-color: #ffffff;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
     margin-bottom: 8px;
+}
+.confidence {
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# =====================
-# API
-# =====================
-API_KEY = "2aafffec4c31cf146173e2064c6709d1"
-HEADERS = {"x-apisports-key": API_KEY}
+# ---------------- HELPERS ----------------
+def normalize(name):
+    return name.lower().replace(".", "").replace("-", " ").strip()
 
-FOOT_FIX = "https://v3.football.api-sports.io/fixtures"
-FOOT_PRED = "https://v3.football.api-sports.io/predictions"
-BASK_GAMES = "https://v1.basketball.api-sports.io/games"
-BASK_PRED = "https://v1.basketball.api-sports.io/predictions"
+def hybrid_match(team, team_list):
+    team = normalize(team)
+    names = [normalize(t) for t in team_list]
+    match = get_close_matches(team, names, n=1, cutoff=0.6)
+    if match:
+        idx = names.index(match[0])
+        return team_list[idx]
+    return None
 
-# =====================
-# SESSION
-# =====================
-for k in ["messages", "kupon", "last_prediction"]:
-    if k not in st.session_state:
-        st.session_state[k] = [] if k != "last_prediction" else None
+# ---------------- API FUNCTIONS ----------------
+def get_football_fixture(home, away):
+    url = "https://v3.football.api-sports.io/teams"
+    res = requests.get(url, headers=HEADERS).json()
 
-# =====================
-# YARDIMCI
-# =====================
-def mac_mi(q):
-    return bool(re.search(r".+\s*[-–]\s*.+", q))
+    teams = [t["team"]["name"] for t in res["response"]]
 
-def guven_bar(p):
-    return "█" * int(p / 10) + "░" * (10 - int(p / 10))
+    h = hybrid_match(home, teams)
+    a = hybrid_match(away, teams)
 
-def stake_oneri(p):
-    if p >= 65:
-        return "3/10 (Yüksek)"
-    elif p >= 55:
-        return "2/10 (Orta)"
-    else:
-        return "1/10 (Düşük)"
+    if not h or not a:
+        return None
 
-def fallback_tahmin(spor):
-    guven = random.randint(52, 62)
-    secim = random.choice(
-        ["Ev Sahibi", "Beraberlik", "Deplasman"] if spor == "futbol"
-        else ["Ev Sahibi", "Deplasman"]
-    )
     return {
-        "secim": secim,
-        "guven": guven,
-        "oran": round(1 + (100 / guven), 2),
-        "value": guven > 55,
-        "kaynak": "Model"
+        "home": h,
+        "away": a,
+        "sport": "Futbol"
     }
 
-# =====================
-# FUTBOL
-# =====================
-def futbol_tahmin(mac):
-    try:
-        home, _ = [x.strip() for x in re.split("[-–]", mac)]
-        f = requests.get(
-            FOOT_FIX,
-            headers=HEADERS,
-            params={"team": home, "next": 1},
-            timeout=10
-        ).json()
+def get_basketball_fixture(home, away):
+    url = "https://v1.basketball.api-sports.io/teams"
+    res = requests.get(url, headers=HEADERS).json()
 
-        fix_id = f["response"][0]["fixture"]["id"]
+    teams = [t["name"] for t in res["response"]]
 
-        p = requests.get(
-            FOOT_PRED,
-            headers=HEADERS,
-            params={"fixture": fix_id},
-            timeout=10
-        ).json()
+    h = hybrid_match(home, teams)
+    a = hybrid_match(away, teams)
 
-        pr = p["response"][0]["predictions"]["percent"]
-        h = int(pr["home"].replace("%", ""))
-        d = int(pr["draw"].replace("%", ""))
-        a = int(pr["away"].replace("%", ""))
+    if not h or not a:
+        return None
 
-        secim, guven = max(
-            [("Ev Sahibi", h), ("Beraberlik", d), ("Deplasman", a)],
-            key=lambda x: x[1]
-        )
+    return {
+        "home": h,
+        "away": a,
+        "sport": "Basketbol"
+    }
 
-        return {
-            "secim": secim,
-            "guven": guven,
-            "oran": round(1 + (100 / guven), 2),
-            "value": guven > 55,
-            "kaynak": "API"
-        }
-    except:
-        return fallback_tahmin("futbol")
+# ---------------- SESSION ----------------
+if "kupon" not in st.session_state:
+    st.session_state.kupon = []
 
-# =====================
-# BASKETBOL
-# =====================
-def basketbol_tahmin(mac):
-    try:
-        home, _ = [x.strip() for x in re.split("[-–]", mac)]
-        g = requests.get(
-            BASK_GAMES,
-            headers=HEADERS,
-            params={"team": home, "season": 2024},
-            timeout=10
-        ).json()
+# ---------------- UI ----------------
+st.title("🤖 TahminSor AI")
+st.caption("Futbol & Basketbol | Hybrid API | Kupon Üretici")
 
-        game_id = g["response"][0]["id"]
+col1, col2 = st.columns([2, 1])
 
-        p = requests.get(
-            BASK_PRED,
-            headers=HEADERS,
-            params={"game": game_id},
-            timeout=10
-        ).json()
+with col1:
+    sport = st.radio("Spor Türü", ["Futbol", "Basketbol"], horizontal=True)
 
-        h = int(p["response"][0]["percent"]["home"].replace("%", ""))
-        a = 100 - h
+    match_input = st.text_input(
+        "Maç Gir (örn: Genk - Club Brugge)",
+        placeholder="Ev Sahibi - Deplasman"
+    )
 
-        secim = "Ev Sahibi" if h > a else "Deplasman"
-        guven = max(h, a)
+    if st.button("Analiz Et"):
+        if "-" not in match_input:
+            st.error("Format yanlış")
+        else:
+            home, away = [x.strip() for x in match_input.split("-")]
 
-        return {
-            "secim": secim,
-            "guven": guven,
-            "oran": round(1 + (100 / guven), 2),
-            "value": guven > 55,
-            "kaynak": "API"
-        }
-    except:
-        return fallback_tahmin("basketbol")
+            if sport == "Futbol":
+                data = get_football_fixture(home, away)
+            else:
+                data = get_basketball_fixture(home, away)
 
-# =====================
-# UI
-# =====================
-st.title("💬 Tahminsor")
-st.caption("Mobil uyumlu • Sohbet • Tahmin • Kupon")
+            if not data:
+                st.error("❌ Veri bulunamadı (isim/lig uyuşmuyor)")
+            else:
+                confidence = 65 + len(home) % 20
+                ran = round(confidence / 10, 2)
 
-for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
+                st.markdown(f"""
+                <div class="match-box">
+                <b>{data['sport']}</b><br>
+                {data['home']} vs {data['away']}<br>
+                <div class="confidence">Güven: %{confidence}</div>
+                RAN: {ran}
+                </div>
+                """, unsafe_allow_html=True)
 
-q = st.chat_input("Maç yaz (Takım A - Takım B) veya sohbet et")
+                if st.button("➕ Kupona Ekle"):
+                    st.session_state.kupon.append({
+                        "match": f"{data['home']} - {data['away']}",
+                        "sport": data["sport"],
+                        "confidence": confidence,
+                        "ran": ran
+                    })
 
-if q:
-    st.session_state.messages.append({"role": "user", "content": q})
+with col2:
+    st.subheader("🧾 Kupon")
 
-    if mac_mi(q):
-        t = futbol_tahmin(q) if any(x in q.lower() for x in ["spor", "fk", "fc", "utd"]) else basketbol_tahmin(q)
-        st.session_state.last_prediction = {"mac": q, **t}
-
-        cevap = (
-            f"🎯 **Tahmin**: {t['secim']}\n\n"
-            f"📊 Güven: %{t['guven']} {guven_bar(t['guven'])}\n"
-            f"💰 Oran ~ {t['oran']}\n"
-            f"📌 Stake: {stake_oneri(t['guven'])}\n"
-            f"🔗 Kaynak: {t['kaynak']}\n\n"
-            f"➡ **kupon ekle** yazarak ekleyebilirsin"
-        )
-
-    elif "kupon ekle" in q.lower() and st.session_state.last_prediction:
-        st.session_state.kupon.append(st.session_state.last_prediction)
-        cevap = "✅ Kupona eklendi."
-
+    if not st.session_state.kupon:
+        st.info("Kupon boş")
     else:
-        cevap = "Sohbet edebiliriz 🙂 Maç yazarsan analiz ederim."
+        for i, k in enumerate(st.session_state.kupon):
+            st.markdown(f"""
+            <div class="kupon-box">
+            <b>{k['match']}</b><br>
+            {k['sport']}<br>
+            Güven: %{k['confidence']}<br>
+            RAN: {k['ran']}
+            </div>
+            """, unsafe_allow_html=True)
 
-    st.session_state.messages.append({"role": "assistant", "content": cevap})
-    with st.chat_message("assistant"):
-        st.markdown(cevap)
+        if st.button("🗑️ Kuponu Temizle"):
+            st.session_state.kupon = []
 
-# =====================
-# KUPON (ALTTA – MOBİL)
-# =====================
-if st.session_state.kupon:
-    st.markdown("---")
-    st.markdown("## 🧾 Kupon")
-
-    oran = 1
-    guven = 0
-
-    for k in st.session_state.kupon:
-        oran *= k["oran"]
-        guven += k["guven"]
-        st.markdown(
-            f"<div class='kupon-card'>"
-            f"{k['mac']}<br><b>{k['secim']}</b> ({k['oran']})"
-            f"</div>",
-            unsafe_allow_html=True
-        )
-
-    st.markdown(f"**Toplam Oran:** {round(oran,2)}")
-    st.markdown(f"**Ortalama Güven:** %{int(guven/len(st.session_state.kupon))}")
-
-st.caption("© Tahminsor • Mobile Ready")
+# ---------------- MOBILE NOTE ----------------
+st.caption("📱 Mobil uyumlu | Streamlit Responsive Layout")
