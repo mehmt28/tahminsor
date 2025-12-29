@@ -1,65 +1,75 @@
-# ===============================
-# Tahminsor – FAZ 7 FINAL
-# Hybrid Fixture • Futbol + Basket
-# ===============================
-
+# app.py
 import streamlit as st
 import requests
 import re
-from datetime import datetime, timedelta
 
-# -------------------------------
-# AYARLAR
-# -------------------------------
-st.set_page_config(
-    page_title="Tahminsor",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="Tahminsor", layout="wide")
 
 API_KEY = "2aafffec4c31cf146173e2064c6709d1"
 HEADERS = {"x-apisports-key": API_KEY}
 
-# -------------------------------
-# YARDIMCI
-# -------------------------------
-def norm(t):
-    return re.sub(r"[^a-z0-9]", "", t.lower())
+FOOT_TEAMS = "https://v3.football.api-sports.io/teams"
+FOOT_FIX = "https://v3.football.api-sports.io/fixtures"
+FOOT_PRED = "https://v3.football.api-sports.io/predictions"
 
+BASK_TEAMS = "https://v1.basketball.api-sports.io/teams"
+BASK_GAMES = "https://v1.basketball.api-sports.io/games"
+BASK_PRED = "https://v1.basketball.api-sports.io/predictions"
+
+
+# ---------------------------
+# UTIL
+# ---------------------------
 def mac_format(q):
-    return bool(re.search(r".+[-–].+", q))
+    return bool(re.search(r".+\s*[-–]\s*.+", q))
 
-def guven_bar(p):
-    dolu = int(p / 10)
-    return "█" * dolu + "░" * (10 - dolu)
 
-# -------------------------------
-# FUTBOL FIXTURE BUL (HYBRID)
-# -------------------------------
-def find_football_fixture(home, away):
-    url = "https://v3.football.api-sports.io/fixtures"
-    params = {
-        "from": datetime.now().strftime("%Y-%m-%d"),
-        "to": (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-    }
-
-    r = requests.get(url, headers=HEADERS, params=params).json()
-    if not r.get("response"):
-        return None
-
-    h, a = norm(home), norm(away)
-
-    for f in r["response"]:
-        fh = norm(f["teams"]["home"]["name"])
-        fa = norm(f["teams"]["away"]["name"])
-        if (h in fh and a in fa) or (h in fa and a in fh):
-            return f
+def search_team_football(name):
+    r = requests.get(
+        FOOT_TEAMS,
+        headers=HEADERS,
+        params={"search": name}
+    ).json()
+    if r.get("response"):
+        return r["response"][0]["team"]["id"]
     return None
 
-def football_predict(fix):
+
+def search_team_basket(name):
+    r = requests.get(
+        BASK_TEAMS,
+        headers=HEADERS,
+        params={"search": name}
+    ).json()
+    if r.get("response"):
+        return r["response"][0]["id"]
+    return None
+
+
+# ---------------------------
+# FUTBOL
+# ---------------------------
+def futbol_tahmin(mac):
+    home, away = [x.strip() for x in re.split("[-–]", mac)]
+
+    home_id = search_team_football(home)
+    if not home_id:
+        return None
+
+    f = requests.get(
+        FOOT_FIX,
+        headers=HEADERS,
+        params={"team": home_id, "next": 1}
+    ).json()
+
+    if not f.get("response"):
+        return None
+
+    fix = f["response"][0]
     fid = fix["fixture"]["id"]
+
     p = requests.get(
-        "https://v3.football.api-sports.io/predictions",
+        FOOT_PRED,
         headers=HEADERS,
         params={"fixture": fid}
     ).json()
@@ -72,42 +82,42 @@ def football_predict(fix):
     d = int(pr["draw"].replace("%", ""))
     a = int(pr["away"].replace("%", ""))
 
-    secim, guven = max(
+    secim = max(
         [("Ev Sahibi", h), ("Beraberlik", d), ("Deplasman", a)],
         key=lambda x: x[1]
     )
 
     return {
-        "spor": "Futbol",
-        "tahmin": secim,
-        "guven": guven,
-        "oran": round(1 + (100 / guven), 2)
+        "spor": "futbol",
+        "secim": secim[0],
+        "guven": secim[1]
     }
 
-# -------------------------------
-# BASKET FIXTURE BUL (HYBRID)
-# -------------------------------
-def find_basket_fixture(home, away):
-    url = "https://v1.basketball.api-sports.io/games"
-    params = {"season": 2024}
 
-    r = requests.get(url, headers=HEADERS, params=params).json()
-    if not r.get("response"):
+# ---------------------------
+# BASKETBOL
+# ---------------------------
+def basketbol_tahmin(mac):
+    home, away = [x.strip() for x in re.split("[-–]", mac)]
+
+    home_id = search_team_basket(home)
+    if not home_id:
         return None
 
-    h, a = norm(home), norm(away)
+    g = requests.get(
+        BASK_GAMES,
+        headers=HEADERS,
+        params={"team": home_id, "season": 2024}
+    ).json()
 
-    for g in r["response"]:
-        gh = norm(g["teams"]["home"]["name"])
-        ga = norm(g["teams"]["away"]["name"])
-        if (h in gh and a in ga) or (h in ga and a in gh):
-            return g
-    return None
+    if not g.get("response"):
+        return None
 
-def basket_predict(game):
+    game = g["response"][0]
     gid = game["id"]
+
     p = requests.get(
-        "https://v1.basketball.api-sports.io/predictions",
+        BASK_PRED,
         headers=HEADERS,
         params={"game": gid}
     ).json()
@@ -120,87 +130,86 @@ def basket_predict(game):
     a = 100 - h
 
     secim = "Ev Sahibi" if h > a else "Deplasman"
-    guven = max(h, a)
 
     return {
-        "spor": "Basketbol",
-        "tahmin": secim,
-        "guven": guven,
-        "oran": round(1 + (100 / guven), 2)
+        "spor": "basketbol",
+        "secim": secim,
+        "guven": max(h, a)
     }
 
-# -------------------------------
+
+# ---------------------------
 # SESSION
-# -------------------------------
+# ---------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 if "kupon" not in st.session_state:
     st.session_state.kupon = []
+if "son" not in st.session_state:
+    st.session_state.son = None
+if "aktif_mac" not in st.session_state:
+    st.session_state.aktif_mac = None
 
-# -------------------------------
+
+# ---------------------------
 # UI
-# -------------------------------
-sol, sag = st.columns([3, 1])
+# ---------------------------
+left, right = st.columns([3, 1])
 
-with sol:
+with left:
     st.title("💬 Tahminsor")
-    st.caption("Hybrid Fixture • Futbol & Basketbol")
+    st.caption("Takım yaz • Sistem bulsun • Tahmin üretelim")
 
-    q = st.chat_input("Maç yaz → Takım A - Takım B")
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
 
-    if q and mac_format(q):
-        home, away = [x.strip() for x in re.split("[-–]", q)]
+    q = st.chat_input("Örnek: Genk - Club Brugge")
 
-        # Önce futbol dene
-        fix = find_football_fixture(home, away)
-        if fix:
-            t = football_predict(fix)
-        else:
-            game = find_basket_fixture(home, away)
-            t = basket_predict(game) if game else None
+    if q:
+        st.session_state.messages.append({"role": "user", "content": q})
 
-        if not t:
-            st.error("❌ Veri bulunamadı (lig / isim uyuşmuyor)")
-        else:
-            st.success(f"✅ {t['spor']} Maçı Bulundu")
-            st.markdown(
-                f"""
-**Tahmin:** {t['tahmin']}  
-**Oran:** {t['oran']}  
-**Güven:** %{t['guven']} {guven_bar(t['guven'])}
-"""
-            )
-            if st.button("🧾 Kupona Ekle"):
-                st.session_state.kupon.append({
-                    "mac": q,
-                    "spor": t["spor"],
-                    "tahmin": t["tahmin"],
-                    "oran": t["oran"],
-                    "guven": t["guven"]
-                })
+        cevap = "Sohbet edebiliriz 🙂"
 
-with sag:
+        if mac_format(q):
+            st.session_state.aktif_mac = q
+
+            t = futbol_tahmin(q)
+            if not t:
+                t = basketbol_tahmin(q)
+
+            if not t:
+                cevap = "❌ Veri bulunamadı (lig / takım adı uyuşmuyor)"
+            else:
+                st.session_state.son = t
+                cevap = (
+                    f"🏟 Spor: **{t['spor'].upper()}**\n\n"
+                    f"👉 Tahmin: **{t['secim']}**\n"
+                    f"📊 Güven: %{t['guven']}\n\n"
+                    f"Kupona eklemek için **kupon ekle** yaz"
+                )
+
+        elif "kupon ekle" in q.lower() and st.session_state.son:
+            st.session_state.kupon.append({
+                "mac": st.session_state.aktif_mac,
+                **st.session_state.son
+            })
+            cevap = "✅ Tahmin kupona eklendi"
+
+        st.session_state.messages.append({"role": "assistant", "content": cevap})
+        with st.chat_message("assistant"):
+            st.markdown(cevap)
+
+with right:
     st.markdown("## 🧾 Kupon")
-    st.markdown(
-        "<div style='background:#f5f5f5;padding:10px;border-radius:10px'>",
-        unsafe_allow_html=True
-    )
 
     if not st.session_state.kupon:
         st.info("Kupon boş")
     else:
-        toplam_oran = 1
-        toplam_guven = 0
-
         for i, k in enumerate(st.session_state.kupon, 1):
-            toplam_oran *= k["oran"]
-            toplam_guven += k["guven"]
             st.markdown(
-                f"**{i}. {k['mac']}**  \n{k['tahmin']} | {k['oran']}"
+                f"**{i}. {k['mac']}**  \n"
+                f"{k['spor']} → {k['secim']} (%{k['guven']})"
             )
 
-        st.markdown("---")
-        st.markdown(f"**Toplam Oran:** {round(toplam_oran,2)}")
-        st.markdown(f"**Kupon Güveni:** %{int(toplam_guven/len(st.session_state.kupon))}")
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-st.caption("© Tahminsor • FAZ 7")
+st.caption("© Tahminsor | Faz 1 – Hybrid Team Matching")
