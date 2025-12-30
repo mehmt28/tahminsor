@@ -1,142 +1,111 @@
 import streamlit as st
-import requests
-import re
 
-st.set_page_config(page_title="TahminSor", layout="wide")
+# =========================
+# SAYFA AYARLARI
+# =========================
+st.set_page_config(
+    page_title="TahminSor - Hybrid Matcher",
+    layout="wide"
+)
 
-API_KEY = "2aafffec4c31cf146173e2064c6709d1"
-HEADERS = {"x-apisports-key": API_KEY}
-
-TEAM_URL = "https://v3.football.api-sports.io/teams"
-FIX_URL = "https://v3.football.api-sports.io/fixtures"
-PRED_URL = "https://v3.football.api-sports.io/predictions"
-
-# ---------- STYLE ----------
-st.markdown("""
-<style>
-.card {
-    background:#ffffff;
-    padding:18px;
-    border-radius:14px;
-    box-shadow:0 4px 10px rgba(0,0,0,.08);
-    margin-bottom:14px
-}
-.good {color:#1e8449;font-weight:600}
-.bad {color:#c0392b;font-weight:600}
-</style>
-""", unsafe_allow_html=True)
-
-# ---------- HELPERS ----------
-def split_match(q):
-    return [x.strip() for x in re.split("[-–]", q)]
-
-def get_prediction(match):
-    try:
-        home, away = split_match(match)
-    except:
-        return None
-
-    team = requests.get(
-        TEAM_URL,
-        headers=HEADERS,
-        params={"search": home}
-    ).json()
-
-    if not team.get("response"):
-        return None
-
-    team_id = team["response"][0]["team"]["id"]
-
-    fix = requests.get(
-        FIX_URL,
-        headers=HEADERS,
-        params={"team": team_id, "next": 1}
-    ).json()
-
-    if not fix.get("response"):
-        return None
-
-    fixture_id = fix["response"][0]["fixture"]["id"]
-
-    pred = requests.get(
-        PRED_URL,
-        headers=HEADERS,
-        params={"fixture": fixture_id}
-    ).json()
-
-    if not pred.get("response"):
-        return None
-
-    p = pred["response"][0]["predictions"]["percent"]
-
-    home_p = int(p["home"].replace("%", ""))
-    draw_p = int(p["draw"].replace("%", ""))
-    away_p = int(p["away"].replace("%", ""))
-
-    pick, conf = max(
-        [("Ev Sahibi", home_p), ("Beraberlik", draw_p), ("Deplasman", away_p)],
-        key=lambda x: x[1]
-    )
-
-    return {
-        "match": f"{home} - {away}",
-        "pick": pick,
-        "confidence": conf,
-        "explain": "API istatistiklerine göre en yüksek olasılık"
-    }
-
-# ---------- SESSION ----------
-if "current" not in st.session_state:
-    st.session_state.current = None
+# =========================
+# SESSION STATE
+# =========================
+if "last_prediction" not in st.session_state:
+    st.session_state.last_prediction = None
 
 if "kupon" not in st.session_state:
     st.session_state.kupon = []
 
-# ---------- UI ----------
-st.title("⚽ TahminSor – Hybrid Matcher")
+# =========================
+# SAHTE HYBRID MATCHER (API YERİNE)
+# =========================
+def hybrid_matcher(user_input: str):
+    name = user_input.lower().strip()
 
-left, right = st.columns([3, 1])
+    known_matches = {
+        "genk - club brugge": {
+            "match": "KRC Genk - Club Brugge",
+            "pick": "E",
+            "confidence": 50
+        },
+        "al arabi - al batin": {
+            "match": "Al Arabi - Al Batin",
+            "pick": "D",
+            "confidence": 46
+        }
+    }
 
-# ===== LEFT =====
+    for k in known_matches:
+        if k in name:
+            return known_matches[k]
+
+    return {
+        "match": user_input,
+        "pick": "Belirsiz",
+        "confidence": 0
+    }
+
+# =========================
+# STIL (BEYAZ ARKA PLAN)
+# =========================
+st.markdown("""
+<style>
+.card {
+    background-color: #f8f9fa;
+    padding: 14px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    border: 1px solid #e0e0e0;
+}
+.good { color: green; font-weight: bold; }
+.bad { color: red; font-weight: bold; }
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# BAŞLIK
+# =========================
+st.title("⚽🏀 TahminSor – Hybrid Matcher")
+
+# =========================
+# LAYOUT
+# =========================
+left, right = st.columns([2, 1])
+
+# =========================
+# SOL TARAF
+# =========================
 with left:
-    match = st.text_input(
+    match_input = st.text_input(
         "Maç gir (örn: genk - club brugge)",
-        placeholder="genk - club brugge"
+        key="match_input"
     )
 
-    col1, col2 = st.columns(2)
+    # ENTER veya TAHMİN AL
+    if st.button("🔮 Tahmin Al") or match_input:
+        if match_input.strip():
+            result = hybrid_matcher(match_input)
 
-    with col1:
-        tahmin_btn = st.button("📊 Tahmin Al")
+            st.session_state.last_prediction = {
+                "match": result.get("match", ""),
+                "pick": result.get("pick", ""),
+                "confidence": result.get("confidence", 0)
+            }
 
-    if tahmin_btn and match:
-        result = get_prediction(match)
-        if result is None:
-            st.session_state.current = None
-            st.error("❌ Veri bulunamadı (lig / isim uyuşmuyor)")
-        else:
-            st.session_state.current = result
+            st.success("Tahmin alındı")
 
-    # ---- TAHMİN GÖSTER ----
-    if st.session_state.current:
-        t = st.session_state.current
-
-        st.markdown(f"""
-        <div class="card">
-            <h4>{t['match']}</h4>
-            <b>Öneri:</b> <span class="good">{t['pick']}</span><br><br>
-            <b>Güven:</b> %{t['confidence']}<br>
-            <b>Açıklama:</b> {t['explain']}
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.progress(t["confidence"] / 100)
-
-        if st.button("🧾 Kupona Ekle"):
-            st.session_state.kupon.append(t)
+    # KUPONA EKLE (AYRI)
+    if st.button("➕ Kupona Ekle"):
+        if st.session_state.last_prediction:
+            st.session_state.kupon.append(st.session_state.last_prediction)
             st.success("Kupona eklendi")
+        else:
+            st.warning("Önce tahmin al")
 
-# ===== RIGHT =====
+# =========================
+# SAĞ TARAF – KUPON
+# =========================
 with right:
     st.subheader("🧾 Kupon")
 
@@ -144,10 +113,17 @@ with right:
         st.info("Kupon boş")
     else:
         for k in st.session_state.kupon:
-            st.markdown(f"""
-            <div class="card">
-                <b>{k['match']}</b><br>
-                <span class="good">{k['pick']}</span><br>
-                Güven: %{k['confidence']}
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div class="card">
+                    <b>{k.get('match','')}</b><br>
+                    <span class="good">Öneri: {k.get('pick','')}</span><br>
+                    Güven: %{k.get('confidence',0)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        if st.button("🗑️ Kuponu Temizle"):
+            st.session_state.kupon = []
+            st.experimental_rerun()
