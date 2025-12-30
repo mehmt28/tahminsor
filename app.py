@@ -26,13 +26,13 @@ def hybrid_matcher(user_input: str):
     database = {
         "genk - club brugge": {
             "match": "KRC Genk - Club Brugge",
-            "pick": "E",
+            "pick": "Ev sahibi galibiyeti",
             "confidence": 50,
             "desc": "Dengeli maç, iç saha avantajı"
         },
         "al arabi - al batin": {
             "match": "Al Arabi - Al Batin",
-            "pick": "D",
+            "pick": "Deplasman takımı galibiyeti",
             "confidence": 46,
             "desc": "İki takım da formsuz"
         }
