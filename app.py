@@ -1,7 +1,7 @@
 import streamlit as st
 
 # =========================
-# SAYFA AYARLARI
+# PAGE CONFIG
 # =========================
 st.set_page_config(
     page_title="TahminSor - Hybrid Matcher",
@@ -18,84 +18,94 @@ if "kupon" not in st.session_state:
     st.session_state.kupon = []
 
 # =========================
-# SAHTE HYBRID MATCHER (API YERİNE)
+# HYBRID MATCHER (MOCK)
 # =========================
 def hybrid_matcher(user_input: str):
-    name = user_input.lower().strip()
+    text = user_input.lower().strip()
 
-    known_matches = {
+    database = {
         "genk - club brugge": {
             "match": "KRC Genk - Club Brugge",
             "pick": "E",
-            "confidence": 50
+            "confidence": 50,
+            "desc": "Dengeli maç, iç saha avantajı"
         },
         "al arabi - al batin": {
             "match": "Al Arabi - Al Batin",
             "pick": "D",
-            "confidence": 46
+            "confidence": 46,
+            "desc": "İki takım da formsuz"
         }
     }
 
-    for k in known_matches:
-        if k in name:
-            return known_matches[k]
+    for k in database:
+        if k in text:
+            return database[k]
 
     return {
         "match": user_input,
         "pick": "Belirsiz",
-        "confidence": 0
+        "confidence": 0,
+        "desc": "Yeterli veri yok"
     }
 
 # =========================
-# STIL (BEYAZ ARKA PLAN)
+# STYLE
 # =========================
 st.markdown("""
 <style>
 .card {
-    background-color: #f8f9fa;
-    padding: 14px;
-    border-radius: 10px;
-    margin-bottom: 12px;
-    border: 1px solid #e0e0e0;
+    background:#f8f9fa;
+    padding:16px;
+    border-radius:10px;
+    border:1px solid #ddd;
+    margin-bottom:12px;
 }
-.good { color: green; font-weight: bold; }
-.bad { color: red; font-weight: bold; }
+.pick { font-weight:bold; color:#198754; }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# BAŞLIK
+# TITLE
 # =========================
 st.title("⚽🏀 TahminSor – Hybrid Matcher")
 
-# =========================
-# LAYOUT
-# =========================
 left, right = st.columns([2, 1])
 
 # =========================
-# SOL TARAF
+# LEFT COLUMN
 # =========================
 with left:
-    match_input = st.text_input(
-        "Maç gir (örn: genk - club brugge)",
-        key="match_input"
-    )
 
-    # ENTER veya TAHMİN AL
-    if st.button("🔮 Tahmin Al") or match_input:
+    with st.form("prediction_form"):
+        match_input = st.text_input(
+            "Maç gir (örn: genk - club brugge)"
+        )
+        submit = st.form_submit_button("🔮 Tahmin Al")
+
+    if submit:
         if match_input.strip():
             result = hybrid_matcher(match_input)
 
-            st.session_state.last_prediction = {
-                "match": result.get("match", ""),
-                "pick": result.get("pick", ""),
-                "confidence": result.get("confidence", 0)
-            }
-
+            st.session_state.last_prediction = result
             st.success("Tahmin alındı")
 
-    # KUPONA EKLE (AYRI)
+    # ---- TAHMİN GÖSTER ----
+    if st.session_state.last_prediction:
+        p = st.session_state.last_prediction
+        st.markdown(
+            f"""
+            <div class="card">
+                <b>{p['match']}</b><br>
+                <span class="pick">Öneri: {p['pick']}</span><br>
+                Güven: %{p['confidence']}<br>
+                <i>{p['desc']}</i>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # ---- KUPONA EKLE ----
     if st.button("➕ Kupona Ekle"):
         if st.session_state.last_prediction:
             st.session_state.kupon.append(st.session_state.last_prediction)
@@ -104,7 +114,7 @@ with left:
             st.warning("Önce tahmin al")
 
 # =========================
-# SAĞ TARAF – KUPON
+# RIGHT COLUMN – KUPON
 # =========================
 with right:
     st.subheader("🧾 Kupon")
@@ -116,9 +126,9 @@ with right:
             st.markdown(
                 f"""
                 <div class="card">
-                    <b>{k.get('match','')}</b><br>
-                    <span class="good">Öneri: {k.get('pick','')}</span><br>
-                    Güven: %{k.get('confidence',0)}
+                    <b>{k['match']}</b><br>
+                    Öneri: <b>{k['pick']}</b><br>
+                    Güven: %{k['confidence']}
                 </div>
                 """,
                 unsafe_allow_html=True
