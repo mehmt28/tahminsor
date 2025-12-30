@@ -15,8 +15,13 @@ PRED_URL = "https://v3.football.api-sports.io/predictions"
 # ========== STYLE ==========
 st.markdown("""
 <style>
-.card{background:#fff;padding:16px;border-radius:12px;
-box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:10px}
+.card{
+background:#ffffff;
+padding:16px;
+border-radius:12px;
+box-shadow:0 2px 8px rgba(0,0,0,.08);
+margin-bottom:12px
+}
 .good{color:#27ae60;font-weight:600}
 .bad{color:#c0392b;font-weight:600}
 </style>
@@ -78,7 +83,7 @@ def football_predict(match):
         "match": f"{home} - {away}",
         "pick": pick,
         "confidence": conf,
-        "comment": "API verisine dayalı istatistiksel tahmin"
+        "comment": "API istatistiklerine dayalı tahmin"
     }
 
 # ========== SESSION ==========
@@ -88,6 +93,9 @@ if "current" not in st.session_state:
 if "kupon" not in st.session_state:
     st.session_state.kupon = []
 
+if "do_predict" not in st.session_state:
+    st.session_state.do_predict = False
+
 # ========== UI ==========
 st.title("⚽ TahminSor – Hybrid Matcher")
 
@@ -95,12 +103,21 @@ left, right = st.columns([3, 1])
 
 # -------- LEFT --------
 with left:
-    with st.form("tahmin_form"):
-        q = st.text_input("Maç gir (örn: genk - club brugge)")
-        submit = st.form_submit_button("📊 Tahmin Al")
+    q = st.text_input(
+        "Maç gir (örn: genk - club brugge)",
+        key="match_input",
+        on_change=lambda: st.session_state.update({"do_predict": True})
+    )
 
-    if submit:
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📊 Tahmin Al"):
+            st.session_state.do_predict = True
+
+    if st.session_state.do_predict:
+        st.session_state.do_predict = False
         result = football_predict(q)
+
         if result is None:
             st.session_state.current = None
             st.error("❌ Veri bulunamadı (lig / isim uyuşmuyor)")
