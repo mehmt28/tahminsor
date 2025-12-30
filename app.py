@@ -2,99 +2,93 @@ import streamlit as st
 import requests
 import re
 
-# ================= CONFIG =================
-st.set_page_config(
-    page_title="TahminSor",
-    layout="wide"
-)
+# ========== CONFIG ==========
+st.set_page_config(page_title="TahminSor", layout="wide")
 
 API_KEY = "2aafffec4c31cf146173e2064c6709d1"
 HEADERS = {"x-apisports-key": API_KEY}
 
-FOOTBALL_TEAMS = "https://v3.football.api-sports.io/teams"
-FOOTBALL_FIXTURES = "https://v3.football.api-sports.io/fixtures"
-FOOTBALL_PRED = "https://v3.football.api-sports.io/predictions"
+TEAMS_URL = "https://v3.football.api-sports.io/teams"
+FIXTURES_URL = "https://v3.football.api-sports.io/fixtures"
+PRED_URL = "https://v3.football.api-sports.io/predictions"
 
-# ================= STYLE =================
+# ========== STYLE ==========
 st.markdown("""
 <style>
-body { background:#f4f6fb; }
-.card {
-    background:#fff;
-    padding:16px;
-    border-radius:12px;
-    margin-top:10px;
-    box-shadow:0 2px 10px rgba(0,0,0,.08);
-}
-.good { color:#2ecc71; font-weight:600 }
-.bad { color:#e74c3c; font-weight:600 }
+.card{background:#fff;padding:16px;border-radius:12px;
+box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:10px}
+.good{color:#27ae60;font-weight:600}
+.bad{color:#c0392b;font-weight:600}
 </style>
 """, unsafe_allow_html=True)
 
-# ================= HELPERS =================
+# ========== HELPERS ==========
 def split_match(q):
     return [x.strip() for x in re.split("[-–]", q)]
 
 def football_predict(match):
-    home, away = split_match(match)
+    try:
+        home, away = split_match(match)
+    except:
+        return None
 
-    t = requests.get(
-        FOOTBALL_TEAMS,
+    team = requests.get(
+        TEAMS_URL,
         headers=HEADERS,
         params={"search": home}
     ).json()
 
-    if not t.get("response"):
+    if not team.get("response"):
         return None
 
-    team_id = t["response"][0]["team"]["id"]
+    team_id = team["response"][0]["team"]["id"]
 
-    f = requests.get(
-        FOOTBALL_FIXTURES,
+    fixture = requests.get(
+        FIXTURES_URL,
         headers=HEADERS,
         params={"team": team_id, "next": 1}
     ).json()
 
-    if not f.get("response"):
+    if not fixture.get("response"):
         return None
 
-    fixture_id = f["response"][0]["fixture"]["id"]
+    fixture_id = fixture["response"][0]["fixture"]["id"]
 
-    p = requests.get(
-        FOOTBALL_PRED,
+    pred = requests.get(
+        PRED_URL,
         headers=HEADERS,
         params={"fixture": fixture_id}
     ).json()
 
-    if not p.get("response"):
+    if not pred.get("response"):
         return None
 
-    perc = p["response"][0]["predictions"]["percent"]
+    perc = pred["response"][0]["predictions"]["percent"]
 
     home_p = int(perc["home"].replace("%", ""))
     draw_p = int(perc["draw"].replace("%", ""))
     away_p = int(perc["away"].replace("%", ""))
 
-    best = max(
+    pick, conf = max(
         [("Ev Sahibi", home_p), ("Beraberlik", draw_p), ("Deplasman", away_p)],
         key=lambda x: x[1]
     )
 
     return {
         "match": f"{home} - {away}",
-        "pick": best[0],
-        "confidence": best[1],
-        "comment": "API istatistiklerine göre en yüksek olasılık"
+        "pick": pick,
+        "confidence": conf,
+        "comment": "API verisine dayalı istatistiksel tahmin"
     }
 
-# ================= SESSION =================
-if "tahmin" not in st.session_state:
-    st.session_state.tahmin = None
+# ========== SESSION ==========
+if "current" not in st.session_state:
+    st.session_state.current = None
 
 if "kupon" not in st.session_state:
     st.session_state.kupon = []
 
-# ================= UI =================
+# ========== UI ==========
 st.title("⚽ TahminSor – Hybrid Matcher")
 
 left, right = st.columns([3, 1])
@@ -106,15 +100,15 @@ with left:
         submit = st.form_submit_button("📊 Tahmin Al")
 
     if submit:
-        data = football_predict(q)
-        if not data:
-            st.error("❌ Veri bulunamadı (isim / lig uyuşmuyor)")
-            st.session_state.tahmin = None
+        result = football_predict(q)
+        if result is None:
+            st.session_state.current = None
+            st.error("❌ Veri bulunamadı (lig / isim uyuşmuyor)")
         else:
-            st.session_state.tahmin = data
+            st.session_state.current = result
 
-    if st.session_state.tahmin:
-        t = st.session_state.tahmin
+    if st.session_state.current:
+        t = st.session_state.current
         st.markdown(f"""
         <div class="card">
             <h4>{t['match']}</h4>
