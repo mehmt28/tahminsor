@@ -2,43 +2,42 @@ import streamlit as st
 import requests
 import re
 
-# ========== CONFIG ==========
 st.set_page_config(page_title="TahminSor", layout="wide")
 
 API_KEY = "2aafffec4c31cf146173e2064c6709d1"
 HEADERS = {"x-apisports-key": API_KEY}
 
-TEAMS_URL = "https://v3.football.api-sports.io/teams"
-FIXTURES_URL = "https://v3.football.api-sports.io/fixtures"
+TEAM_URL = "https://v3.football.api-sports.io/teams"
+FIX_URL = "https://v3.football.api-sports.io/fixtures"
 PRED_URL = "https://v3.football.api-sports.io/predictions"
 
-# ========== STYLE ==========
+# ---------- STYLE ----------
 st.markdown("""
 <style>
-.card{
-background:#ffffff;
-padding:16px;
-border-radius:12px;
-box-shadow:0 2px 8px rgba(0,0,0,.08);
-margin-bottom:12px
+.card {
+    background:#ffffff;
+    padding:18px;
+    border-radius:14px;
+    box-shadow:0 4px 10px rgba(0,0,0,.08);
+    margin-bottom:14px
 }
-.good{color:#27ae60;font-weight:600}
-.bad{color:#c0392b;font-weight:600}
+.good {color:#1e8449;font-weight:600}
+.bad {color:#c0392b;font-weight:600}
 </style>
 """, unsafe_allow_html=True)
 
-# ========== HELPERS ==========
+# ---------- HELPERS ----------
 def split_match(q):
     return [x.strip() for x in re.split("[-–]", q)]
 
-def football_predict(match):
+def get_prediction(match):
     try:
         home, away = split_match(match)
     except:
         return None
 
     team = requests.get(
-        TEAMS_URL,
+        TEAM_URL,
         headers=HEADERS,
         params={"search": home}
     ).json()
@@ -48,16 +47,16 @@ def football_predict(match):
 
     team_id = team["response"][0]["team"]["id"]
 
-    fixture = requests.get(
-        FIXTURES_URL,
+    fix = requests.get(
+        FIX_URL,
         headers=HEADERS,
         params={"team": team_id, "next": 1}
     ).json()
 
-    if not fixture.get("response"):
+    if not fix.get("response"):
         return None
 
-    fixture_id = fixture["response"][0]["fixture"]["id"]
+    fixture_id = fix["response"][0]["fixture"]["id"]
 
     pred = requests.get(
         PRED_URL,
@@ -68,11 +67,11 @@ def football_predict(match):
     if not pred.get("response"):
         return None
 
-    perc = pred["response"][0]["predictions"]["percent"]
+    p = pred["response"][0]["predictions"]["percent"]
 
-    home_p = int(perc["home"].replace("%", ""))
-    draw_p = int(perc["draw"].replace("%", ""))
-    away_p = int(perc["away"].replace("%", ""))
+    home_p = int(p["home"].replace("%", ""))
+    draw_p = int(p["draw"].replace("%", ""))
+    away_p = int(p["away"].replace("%", ""))
 
     pick, conf = max(
         [("Ev Sahibi", home_p), ("Beraberlik", draw_p), ("Deplasman", away_p)],
@@ -83,55 +82,51 @@ def football_predict(match):
         "match": f"{home} - {away}",
         "pick": pick,
         "confidence": conf,
-        "comment": "API istatistiklerine dayalı tahmin"
+        "explain": "API istatistiklerine göre en yüksek olasılık"
     }
 
-# ========== SESSION ==========
+# ---------- SESSION ----------
 if "current" not in st.session_state:
     st.session_state.current = None
 
 if "kupon" not in st.session_state:
     st.session_state.kupon = []
 
-if "do_predict" not in st.session_state:
-    st.session_state.do_predict = False
-
-# ========== UI ==========
+# ---------- UI ----------
 st.title("⚽ TahminSor – Hybrid Matcher")
 
 left, right = st.columns([3, 1])
 
-# -------- LEFT --------
+# ===== LEFT =====
 with left:
-    q = st.text_input(
+    match = st.text_input(
         "Maç gir (örn: genk - club brugge)",
-        key="match_input",
-        on_change=lambda: st.session_state.update({"do_predict": True})
+        placeholder="genk - club brugge"
     )
 
     col1, col2 = st.columns(2)
+
     with col1:
-        if st.button("📊 Tahmin Al"):
-            st.session_state.do_predict = True
+        tahmin_btn = st.button("📊 Tahmin Al")
 
-    if st.session_state.do_predict:
-        st.session_state.do_predict = False
-        result = football_predict(q)
-
+    if tahmin_btn and match:
+        result = get_prediction(match)
         if result is None:
             st.session_state.current = None
             st.error("❌ Veri bulunamadı (lig / isim uyuşmuyor)")
         else:
             st.session_state.current = result
 
+    # ---- TAHMİN GÖSTER ----
     if st.session_state.current:
         t = st.session_state.current
+
         st.markdown(f"""
         <div class="card">
             <h4>{t['match']}</h4>
-            <b>Öneri:</b> {t['pick']}<br>
-            <b>Güven:</b> %{t['confidence']}<br><br>
-            <i>{t['comment']}</i>
+            <b>Öneri:</b> <span class="good">{t['pick']}</span><br><br>
+            <b>Güven:</b> %{t['confidence']}<br>
+            <b>Açıklama:</b> {t['explain']}
         </div>
         """, unsafe_allow_html=True)
 
@@ -141,12 +136,12 @@ with left:
             st.session_state.kupon.append(t)
             st.success("Kupona eklendi")
 
-# -------- RIGHT --------
+# ===== RIGHT =====
 with right:
     st.subheader("🧾 Kupon")
 
     if not st.session_state.kupon:
-        st.info("Henüz kupon yok")
+        st.info("Kupon boş")
     else:
         for k in st.session_state.kupon:
             st.markdown(f"""
