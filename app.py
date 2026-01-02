@@ -1,3 +1,12 @@
+import os
+import streamlit as st
+
+API_KEY = st.secrets.get("API_SPORTS_KEY") or os.getenv("API_SPORTS_KEY")
+
+if not API_KEY:
+    st.error("❌ API_SPORTS_KEY tanımlı değil. Streamlit Secrets kontrol et.")
+    st.stop()
+
 import streamlit as st
 import requests
 
