@@ -6,12 +6,11 @@ import re
 st.set_page_config(page_title="TahminSor", layout="wide")
 
 # ==================================================
-# API KEY – ÇÖKME GARANTİSİZ YAPI (ÖNEMLİ KISIM)
+# API KEY (ASLA KEYERROR VERMEZ)
 # ==================================================
 API_KEY = None
-
 try:
-    API_KEY = st.secrets.get("API_SPORTS_KEY", None)
+    API_KEY = st.secrets.get("API_SPORTS_KEY")
 except Exception:
     API_KEY = None
 
@@ -27,46 +26,85 @@ HEADERS = {
 # ==================================================
 # SESSION STATE
 # ==================================================
+if "tahmin" not in st.session_state:
+    st.session_state.tahmin = None
+
 if "kupon" not in st.session_state:
     st.session_state.kupon = []
 
-if "tahmin" not in st.session_state:
-    st.session_state.tahmin = None
+# ==================================================
+# YARDIMCI
+# ==================================================
+def mac_format(text):
+    return bool(re.search(r".+\s*-\s*.+", text))
+
+def futbol_tahmin(mac):
+    home, away = [x.strip() for x in mac.split("-")]
+
+    # 1️⃣ Fixture bul
+    fix_res = requests.get(
+        "https://v3.football.api-sports.io/fixtures",
+        headers=HEADERS,
+        params={"team": home, "next": 1}
+    ).json()
+
+    if not fix_res.get("response"):
+        return None
+
+    fixture = fix_res["response"][0]
+    fixture_id = fixture["fixture"]["id"]
+
+    # 2️⃣ Prediction çek
+    pred_res = requests.get(
+        "https://v3.football.api-sports.io/predictions",
+        headers=HEADERS,
+        params={"fixture": fixture_id}
+    ).json()
+
+    if not pred_res.get("response"):
+        return None
+
+    p = pred_res["response"][0]["predictions"]["percent"]
+
+    home_p = int(p["home"].replace("%", ""))
+    draw_p = int(p["draw"].replace("%", ""))
+    away_p = int(p["away"].replace("%", ""))
+
+    best = max(
+        [("Ev Sahibi", home_p), ("Beraberlik", draw_p), ("Deplasman", away_p)],
+        key=lambda x: x[1]
+    )
+
+    return {
+        "match": mac,
+        "prediction": best[0],
+        "confidence": best[1],
+        "detail": f"Ev %{home_p} | Ber %{draw_p} | Dep %{away_p}"
+    }
 
 # ==================================================
 # UI
 # ==================================================
-st.title("⚽🏀 TahminSor – Gerçek API Destekli")
+st.title("⚽ TahminSor – Gerçek API Destekli")
 
 left, right = st.columns([2, 1])
 
 with left:
-    mac = st.text_input("Maç gir (örn: Chelsea - Bournemouth)")
+    mac = st.text_input("Maç gir (örn: Genk - Club Brugge)", key="mac")
 
-    col_a, col_b = st.columns(2)
-    tahmin_al = col_a.button("🔮 Tahmin Al")
-    kupona_ekle = col_b.button("➕ Kupona Ekle")
+    col1, col2 = st.columns(2)
+    tahmin_btn = col1.button("🔮 Tahmin Al")
+    kupon_btn = col2.button("➕ Kupona Ekle")
 
-    if tahmin_al:
-        if not mac.strip():
-            st.error("❌ Maç adı boş olamaz")
+    if tahmin_btn and mac_format(mac):
+        if not API_ACTIVE:
+            st.error("❌ API KEY aktif değil")
         else:
-            if not API_ACTIVE:
-                # API YOKSA ÇÖKMEYEN DEMO MOD
-                st.session_state.tahmin = {
-                    "match": mac,
-                    "prediction": "Belirsiz",
-                    "confidence": 0,
-                    "note": "API bağlantısı yok – demo mod"
-                }
+            t = futbol_tahmin(mac)
+            if not t:
+                st.error("❌ Veri bulunamadı (lig / isim uyuşmuyor)")
             else:
-                # ŞU ANLIK STABİL MOCK (API bağlanınca değiştirilecek)
-                st.session_state.tahmin = {
-                    "match": mac,
-                    "prediction": "1X",
-                    "confidence": 62,
-                    "note": "Form + oran simülasyonu"
-                }
+                st.session_state.tahmin = t
 
     if st.session_state.tahmin:
         t = st.session_state.tahmin
@@ -76,10 +114,10 @@ with left:
 **Maç:** {t['match']}  
 **Öneri:** {t['prediction']}  
 **Güven:** %{t['confidence']}  
-_{t['note']}_
+_{t['detail']}_
 """)
 
-    if kupona_ekle and st.session_state.tahmin:
+    if kupon_btn and st.session_state.tahmin:
         st.session_state.kupon.append(st.session_state.tahmin)
         st.success("✅ Kupona eklendi")
 
@@ -92,11 +130,11 @@ with right:
         for i, k in enumerate(st.session_state.kupon, 1):
             st.markdown(
                 f"**{i}. {k['match']}**  \n"
-                f"Öneri: {k['prediction']} | Güven: %{k['confidence']}"
+                f"{k['prediction']} | %{k['confidence']}"
             )
 
         if st.button("🗑️ Kuponu Temizle"):
-            st.session_state.kupon = []
+            st.session_state.kupon.clear()
             st.success("Kupon temizlendi")
 
-st.caption("TahminSor • Stabil Final Build")
+st.caption("TahminSor • Gerçek API • Stabil Build")
